@@ -1,0 +1,54 @@
+﻿node : C:\Users\Santhosh K
+umar\OneDrive\Desktop\chat
+ app\backend\server.js:163
+At line:1 char:1
++ node server.js 2>&1 | 
+Out-File -FilePath 
+out.log -Encoding utf8
++ ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (C  
+  :\Users\Santho...d\se   
+ rver.js:163:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+    console.log(\`Server 
+is running on port 
+\${PORT}\`);
+                ^
+
+SyntaxError: Invalid or 
+unexpected token
+    at wrapSafe (node:inte
+rnal/modules/cjs/loader:14
+86:18)
+    at Module._compile (no
+de:internal/modules/cjs/lo
+ader:1528:20)
+    at Object..js (node:in
+ternal/modules/cjs/loader:
+1706:10)
+    at Module.load (node:i
+nternal/modules/cjs/loader
+:1289:32)
+    at Function._load (nod
+e:internal/modules/cjs/loa
+der:1108:12)
+    at 
+TracingChannel.traceSync (
+node:diagnostics_channel:3
+22:14)
+    at wrapModuleLoad (nod
+e:internal/modules/cjs/loa
+der:220:24)
+    at Function.executeUse
+rEntryPoint [as runMain] (
+node:internal/modules/run_
+main:170:5)
+    at node:internal/main/
+run_main_module:36:49
+
+Node.js v22.14.0

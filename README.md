@@ -60,6 +60,24 @@ Samvad App is a high-fidelity, real-time messaging platform designed with a focu
    npm run dev
    ```
 
+## 🌐 Production Deployment
+
+### 1. Deploy the Backend
+Since this app uses Socket.io, you cannot host the backend on Vercel. Use a service like **Render**, **Railway**, or **DigitalOcean**.
+- Push the `backend/` folder to your chosen platform.
+- Ensure your MySQL database is accessible from the internet.
+- Set up your environment variables (DB credentials) in the hosting provider's dashboard.
+
+### 2. Deploy the Frontend (Vercel)
+- Link your GitHub repository to Vercel.
+- Set the **Root Directory** to `frontend`.
+- Add an **Environment Variable**:
+  - Key: `VITE_API_BASE_URL`
+  - Value: `https://your-backend-url.onrender.com` (Replace with your actual backend URL).
+- Deploy!
+
+---
+
 ## 🔒 Security & Performance
 - **Local Persistence**: User preferences like chat themes are stored locally for instant loading.
 - **Optimized Media**: Server-side file handling for high-resolution images without frontend lag.

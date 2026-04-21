@@ -1,5 +1,7 @@
 {
-  "name": "samvad-app",
+  "name": "samvad_app",
+  "version": "1.0.0",
+  "license": "MIT",
   "scripts": {
     "build": "cd frontend && npm install && npm run build",
     "start": "node backend/server.js"

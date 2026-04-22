@@ -9,11 +9,18 @@ async function initDB() {
   const password = process.env.DB_PASSWORD || 'root';
   const database = process.env.DB_NAME || 'chatapp';
   const port = parseInt(process.env.DB_PORT) || 3306;
+  const ssl = process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined);
 
   try {
     // 1. First, connect without a database to ensure it exists
     console.log(`Checking connection to MySQL at ${host}:${port}...`);
-    const connection = await mysql.createConnection({ host, user, password, port });
+    const connection = await mysql.createConnection({ 
+      host, 
+      user, 
+      password, 
+      port,
+      ssl: ssl
+    });
     
     await connection.query(`CREATE DATABASE IF NOT EXISTS ${database};`);
     await connection.end();
@@ -28,7 +35,8 @@ async function initDB() {
       port,
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0
+      queueLimit: 0,
+      ssl: ssl
     });
 
     // 3. Initialize tables

@@ -4,56 +4,41 @@ const mysql = require('mysql2/promise');
 let pool;
 
 async function initDB() {
-  const databaseUrl = process.env.DATABASE_URL;
-  const host = process.env.DB_HOST || '127.0.0.1';
-  const user = process.env.DB_USER || 'root';
-  const password = process.env.DB_PASSWORD || 'root';
-  const database = process.env.DB_NAME || 'chatapp';
-  const port = parseInt(process.env.DB_PORT) || 3306;
-  const ssl = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined;
+  const config = {
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: parseInt(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || 'root',
+    database: process.env.DB_NAME || 'chatapp',
+    ssl: { rejectUnauthorized: false }
+  };
 
-  let connectionConfig;
-
-  if (databaseUrl) {
-    try {
-      const url = new URL(databaseUrl);
-      connectionConfig = {
-        host: url.hostname,
-        port: parseInt(url.port) || 3306,
-        user: decodeURIComponent(url.username),
-        password: decodeURIComponent(url.password),
-        database: url.pathname.slice(1),
-        ssl: ssl
-      };
-    } catch (e) {
-      console.error('Invalid DATABASE_URL provided. Falling back to individual variables.');
-    }
+  // Skip SSL for local development unless explicitly requested
+  if (config.host === '127.0.0.1' || config.host === 'localhost') {
+    if (process.env.DB_SSL !== 'true') delete config.ssl;
   }
 
-  if (!connectionConfig) {
-    connectionConfig = { host, user, password, database, port, ssl };
+  // Support for single Connection String (Render/Cloud)
+  if (process.env.DATABASE_URL) {
+    const url = new URL(process.env.DATABASE_URL);
+    config.host = url.hostname;
+    config.port = parseInt(url.port) || 3306;
+    config.user = decodeURIComponent(url.username);
+    config.password = decodeURIComponent(url.password);
+    config.database = url.pathname.slice(1);
+    config.ssl = { rejectUnauthorized: false };
   }
 
   try {
-    // 1. Check if database is reachable/ready
-    console.log(`Attempting to connect to database at ${connectionConfig.host}...`);
-    const connection = await mysql.createConnection({
-      host: connectionConfig.host,
-      port: connectionConfig.port,
-      user: connectionConfig.user,
-      password: connectionConfig.password,
-      ssl: connectionConfig.ssl
-    });
-
-    if (!databaseUrl) {
-      await connection.query(`CREATE DATABASE IF NOT EXISTS ${connectionConfig.database};`);
-    }
+    // 1. Connection test
+    console.log(`Attempting to connect to database at ${config.host}...`);
+    const connection = await mysql.createConnection(config);
+    console.log("Connected to Aiven MySQL!");
     await connection.end();
-    console.log('Database check successful.');
 
-    // 2. Initialize the pool
+    // 2. Initialize the pool (Required for the app to function)
     pool = mysql.createPool({
-      ...connectionConfig,
+      ...config,
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0
@@ -113,14 +98,9 @@ async function initDB() {
     }
 
   } catch (error) {
-    console.error('Error initializing database:', error.message);
+    console.error("Error initializing database:", error.message);
     if (error.code === 'ENOTFOUND') {
-      console.error(`DNS Error: Could not resolve host "${connectionConfig.host}". Please check your DATABASE_URL.`);
-    }
-    if (!databaseUrl && error.code === 'ECONNREFUSED' && host === 'localhost') {
-      console.log('Detected ECONNREFUSED with "localhost". Trying "127.0.0.1" instead...');
-      process.env.DB_HOST = '127.0.0.1';
-      return initDB();
+      console.error(`DNS Error: Could not resolve host "${config.host}".`);
     }
     process.exit(1);
   }

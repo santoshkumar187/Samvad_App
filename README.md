@@ -37,9 +37,6 @@ Samvad App is a high-fidelity, real-time messaging platform designed with a focu
 - Node.js (v16+)
 - MySQL Server
 
-
----
-
 ## 🔒 Security & Performance
 - **Local Persistence**: User preferences like chat themes are stored locally for instant loading.
 - **Optimized Media**: Server-side file handling for high-resolution images without frontend lag.

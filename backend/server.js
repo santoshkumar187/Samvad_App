@@ -22,10 +22,13 @@ app.use(express.json());
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Root route for health check
-app.get('/', (req, res) => {
-  res.send('Hello! The Samvad App Server is working.');
-});
+// Serve static frontend files from the 'frontend/dist' directory
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// Root route moved after static middleware if needed, but we'll use a catch-all instead.
+// app.get('/', (req, res) => {
+//   res.send('Hello! The Samvad App Server is working.');
+// });
 
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
@@ -413,6 +416,12 @@ io.on('connection', (socket) => {
       }
     }
   });
+});
+
+// Catch-all route to serve the frontend index.html for any unknown routes
+// This MUST be the last route in your app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
 const PORT = process.env.PORT || 3000;

@@ -22,6 +22,11 @@ app.use(express.json());
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Root route for health check
+app.get('/', (req, res) => {
+  res.send('Hello! The Samvad App Server is working.');
+});
+
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {

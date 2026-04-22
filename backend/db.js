@@ -1,10 +1,4 @@
-require('dotenv').config();
-const mysql = require('mysql2/promise');
-
-let pool;
-
 async function initDB() {
-  // Support both individual variables and a single connection string (e.g., from Render/Cloud)
   const databaseUrl = process.env.DATABASE_URL;
   const host = process.env.DB_HOST || '127.0.0.1';
   const user = process.env.DB_USER || 'root';
@@ -13,39 +7,51 @@ async function initDB() {
   const port = parseInt(process.env.DB_PORT) || 3306;
   const ssl = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined;
 
-  try {
-    // 1. First, check/create database
-    if (databaseUrl) {
-      console.log('Using DATABASE_URL for connection.');
-      // When using a connection string, we connect to check if reachable
-      const connection = await mysql.createConnection(databaseUrl + (databaseUrl.includes('?') ? '&' : '?') + 'ssl={"rejectUnauthorized":false}');
-      console.log('Database connection via URL successful.');
-      await connection.end();
-    } else {
-      console.log(`Checking connection to MySQL at ${host}:${port}...`);
-      const connection = await mysql.createConnection({ host, user, password, port, ssl });
-      await connection.query(`CREATE DATABASE IF NOT EXISTS ${database};`);
-      await connection.end();
-      console.log(`Database "${database}" is ready.`);
+  let connectionConfig;
+
+  if (databaseUrl) {
+    try {
+      const url = new URL(databaseUrl);
+      connectionConfig = {
+        host: url.hostname,
+        port: parseInt(url.port) || 3306,
+        user: decodeURIComponent(url.username),
+        password: decodeURIComponent(url.password),
+        database: url.pathname.slice(1),
+        ssl: ssl
+      };
+    } catch (e) {
+      console.error('Invalid DATABASE_URL provided. Falling back to individual variables.');
     }
+  }
+
+  if (!connectionConfig) {
+    connectionConfig = { host, user, password, database, port, ssl };
+  }
+
+  try {
+    // 1. Check if database is reachable/ready
+    console.log(`Attempting to connect to database at ${connectionConfig.host}...`);
+    const connection = await mysql.createConnection({
+      host: connectionConfig.host,
+      port: connectionConfig.port,
+      user: connectionConfig.user,
+      password: connectionConfig.password,
+      ssl: connectionConfig.ssl
+    });
+
+    if (!databaseUrl) {
+      await connection.query(`CREATE DATABASE IF NOT EXISTS ${connectionConfig.database};`);
+    }
+    await connection.end();
+    console.log('Database check successful.');
 
     // 2. Initialize the pool
-    pool = mysql.createPool(databaseUrl ? {
-      uri: databaseUrl,
-      ssl: ssl,
+    pool = mysql.createPool({
+      ...connectionConfig,
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0
-    } : {
-      host,
-      user,
-      password,
-      database,
-      port,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
-      ssl
     });
 
     // 3. Initialize tables
@@ -88,7 +94,7 @@ async function initDB() {
 
     console.log('Database tables initialized successfully.');
 
-    // Migration checks...
+    // Migration checks (email column, etc.)
     const [userCols] = await pool.query("SHOW COLUMNS FROM users LIKE 'email'");
     if (userCols.length === 0) {
       await pool.query("ALTER TABLE users ADD COLUMN email VARCHAR(255) NOT NULL UNIQUE AFTER username");
@@ -102,7 +108,10 @@ async function initDB() {
     }
 
   } catch (error) {
-    console.error('Error initializing database:', error);
+    console.error('Error initializing database:', error.message);
+    if (error.code === 'ENOTFOUND') {
+      console.error(`DNS Error: Could not resolve host "${connectionConfig.host}". Please check your DATABASE_URL.`);
+    }
     if (!databaseUrl && error.code === 'ECONNREFUSED' && host === 'localhost') {
       console.log('Detected ECONNREFUSED with "localhost". Trying "127.0.0.1" instead...');
       process.env.DB_HOST = '127.0.0.1';

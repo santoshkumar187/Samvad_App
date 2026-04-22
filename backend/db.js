@@ -4,30 +4,39 @@ const mysql = require('mysql2/promise');
 let pool;
 
 async function initDB() {
+  // Support both individual variables and a single connection string (e.g., from Render/Cloud)
+  const databaseUrl = process.env.DATABASE_URL;
   const host = process.env.DB_HOST || '127.0.0.1';
   const user = process.env.DB_USER || 'root';
   const password = process.env.DB_PASSWORD || 'root';
   const database = process.env.DB_NAME || 'chatapp';
   const port = parseInt(process.env.DB_PORT) || 3306;
-  const ssl = process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined);
+  const ssl = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined;
 
   try {
-    // 1. First, connect without a database to ensure it exists
-    console.log(`Checking connection to MySQL at ${host}:${port}...`);
-    const connection = await mysql.createConnection({ 
-      host, 
-      user, 
-      password, 
-      port,
-      ssl: ssl
-    });
-    
-    await connection.query(`CREATE DATABASE IF NOT EXISTS ${database};`);
-    await connection.end();
-    console.log(`Database "${database}" is ready.`);
+    // 1. First, check/create database
+    if (databaseUrl) {
+      console.log('Using DATABASE_URL for connection.');
+      // When using a connection string, we connect to check if reachable
+      const connection = await mysql.createConnection(databaseUrl + (databaseUrl.includes('?') ? '&' : '?') + 'ssl={"rejectUnauthorized":false}');
+      console.log('Database connection via URL successful.');
+      await connection.end();
+    } else {
+      console.log(`Checking connection to MySQL at ${host}:${port}...`);
+      const connection = await mysql.createConnection({ host, user, password, port, ssl });
+      await connection.query(`CREATE DATABASE IF NOT EXISTS ${database};`);
+      await connection.end();
+      console.log(`Database "${database}" is ready.`);
+    }
 
-    // 2. Initialize the pool with the database
-    pool = mysql.createPool({
+    // 2. Initialize the pool
+    pool = mysql.createPool(databaseUrl ? {
+      uri: databaseUrl,
+      ssl: ssl,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0
+    } : {
       host,
       user,
       password,
@@ -36,7 +45,7 @@ async function initDB() {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      ssl: ssl
+      ssl
     });
 
     // 3. Initialize tables
@@ -79,11 +88,10 @@ async function initDB() {
 
     console.log('Database tables initialized successfully.');
 
-    // Ensure columns exist (for migration)
+    // Migration checks...
     const [userCols] = await pool.query("SHOW COLUMNS FROM users LIKE 'email'");
     if (userCols.length === 0) {
       await pool.query("ALTER TABLE users ADD COLUMN email VARCHAR(255) NOT NULL UNIQUE AFTER username");
-      console.log('Added email column to users table');
     }
 
     const [msgCols] = await pool.query("SHOW COLUMNS FROM messages LIKE 'is_pinned'");
@@ -91,15 +99,14 @@ async function initDB() {
       await pool.query("ALTER TABLE messages ADD COLUMN is_pinned BOOLEAN DEFAULT false");
       await pool.query("ALTER TABLE messages ADD COLUMN deleted_for_sender BOOLEAN DEFAULT false");
       await pool.query("ALTER TABLE messages ADD COLUMN deleted_for_receiver BOOLEAN DEFAULT false");
-      console.log('Added migration columns to messages table');
     }
 
   } catch (error) {
     console.error('Error initializing database:', error);
-    if (error.code === 'ECONNREFUSED' && host === 'localhost') {
+    if (!databaseUrl && error.code === 'ECONNREFUSED' && host === 'localhost') {
       console.log('Detected ECONNREFUSED with "localhost". Trying "127.0.0.1" instead...');
       process.env.DB_HOST = '127.0.0.1';
-      return initDB(); // Retry once with IP
+      return initDB();
     }
     process.exit(1);
   }

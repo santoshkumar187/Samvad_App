@@ -1,25 +1,37 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+let pool;
 
 async function initDB() {
-  try {
-    // Test connection
-    const connection = await pool.getConnection();
-    console.log(`Connected to database: ${process.env.DB_NAME}`);
-    connection.release();
+  const host = process.env.DB_HOST || '127.0.0.1';
+  const user = process.env.DB_USER || 'root';
+  const password = process.env.DB_PASSWORD || 'root';
+  const database = process.env.DB_NAME || 'chatapp';
+  const port = parseInt(process.env.DB_PORT) || 3306;
 
-    // Initialize database tables
+  try {
+    // 1. First, connect without a database to ensure it exists
+    console.log(`Checking connection to MySQL at ${host}:${port}...`);
+    const connection = await mysql.createConnection({ host, user, password, port });
+    
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ${database};`);
+    await connection.end();
+    console.log(`Database "${database}" is ready.`);
+
+    // 2. Initialize the pool with the database
+    pool = mysql.createPool({
+      host,
+      user,
+      password,
+      database,
+      port,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0
+    });
+
+    // 3. Initialize tables
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -57,35 +69,38 @@ async function initDB() {
       );
     `);
 
-    console.log('Database initialized successfully (Persistence On)');
+    console.log('Database tables initialized successfully.');
+
+    // Ensure columns exist (for migration)
+    const [userCols] = await pool.query("SHOW COLUMNS FROM users LIKE 'email'");
+    if (userCols.length === 0) {
+      await pool.query("ALTER TABLE users ADD COLUMN email VARCHAR(255) NOT NULL UNIQUE AFTER username");
+      console.log('Added email column to users table');
+    }
+
+    const [msgCols] = await pool.query("SHOW COLUMNS FROM messages LIKE 'is_pinned'");
+    if (msgCols.length === 0) {
+      await pool.query("ALTER TABLE messages ADD COLUMN is_pinned BOOLEAN DEFAULT false");
+      await pool.query("ALTER TABLE messages ADD COLUMN deleted_for_sender BOOLEAN DEFAULT false");
+      await pool.query("ALTER TABLE messages ADD COLUMN deleted_for_receiver BOOLEAN DEFAULT false");
+      console.log('Added migration columns to messages table');
+    }
 
   } catch (error) {
     console.error('Error initializing database:', error);
-    // If database doesn't exist, we might need to create it (only if environment allows)
-    if (error.code === 'ER_BAD_DB_ERROR') {
-      console.log(`Database "${process.env.DB_NAME}" not found. Attempting to create...`);
-      try {
-        const tempConn = await mysql.createConnection({
-          host: process.env.DB_HOST,
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD,
-          port: process.env.DB_PORT || 3306
-        });
-        await tempConn.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME};`);
-        await tempConn.end();
-        console.log(`Database "${process.env.DB_NAME}" created. Please restart the server.`);
-        process.exit(0);
-      } catch (createError) {
-        console.error('Failed to create database:', createError);
-        process.exit(1);
-      }
-    } else {
-      process.exit(1);
+    if (error.code === 'ECONNREFUSED' && host === 'localhost') {
+      console.log('Detected ECONNREFUSED with "localhost". Trying "127.0.0.1" instead...');
+      process.env.DB_HOST = '127.0.0.1';
+      return initDB(); // Retry once with IP
     }
+    process.exit(1);
   }
 }
 
 function getPool() {
+  if (!pool) {
+    throw new Error('Database pool has not been initialized. Call initDB first.');
+  }
   return pool;
 }
 

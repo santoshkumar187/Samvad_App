@@ -1,3 +1,8 @@
+require('dotenv').config();
+const mysql = require('mysql2/promise');
+
+let pool;
+
 async function initDB() {
   const databaseUrl = process.env.DATABASE_URL;
   const host = process.env.DB_HOST || '127.0.0.1';

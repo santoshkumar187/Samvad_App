@@ -7,7 +7,7 @@ import MessageInput from './components/MessageInput'
 import { MdVisibility, MdVisibilityOff, MdChatBubble, MdPerson, MdEmail, MdLock, MdCall } from 'react-icons/md'
 import { FaGoogle, FaApple } from 'react-icons/fa'
 
-const SERVER_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? `http://${window.location.hostname}:3000` : '');
+const SERVER_URL = import.meta.env.DEV ? `http://${window.location.hostname}:3000` : '';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null)

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MdMic, MdMicOff, MdVideocam, MdVideocamOff, MdCallEnd } from 'react-icons/md';
+import { MdMic, MdMicOff, MdVideocam, MdVideocamOff, MdCallEnd, MdVolumeUp } from 'react-icons/md';
 
 const ICE_SERVERS = {
   iceServers: [
@@ -15,7 +15,7 @@ export default function CallWindow({ remoteUser, callType, isInitiator, socket, 
   const remoteAudioRef = useRef(null);
   const peerRef        = useRef(null);
   const localStreamRef = useRef(null);
-  const remoteStream   = useRef(new MediaStream());
+  const remoteStreamRef = useRef(null);
   const iceQueue       = useRef([]);
   const remoteDescReady= useRef(false);
   const cleanedUp      = useRef(false);
@@ -27,6 +27,7 @@ export default function CallWindow({ remoteUser, callType, isInitiator, socket, 
   const [duration,    setDuration]    = useState(0);
   const [connected,   setConnected]   = useState(false);
   const [status,      setStatus]      = useState(isInitiator ? 'Ringing...' : 'Connecting...');
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
   useEffect(() => { startCall(); return () => cleanup(); }, []);
 
@@ -43,16 +44,32 @@ export default function CallWindow({ remoteUser, callType, isInitiator, socket, 
   };
 
   const playRemote = () => {
-    const s = remoteStream.current;
+    const s = remoteStreamRef.current;
+    if (!s) return;
+
     if (callType === 'video' && remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = s;
-      remoteVideoRef.current.play().catch(() => {});
+      if (remoteVideoRef.current.srcObject !== s) {
+        remoteVideoRef.current.srcObject = s;
+      }
+      remoteVideoRef.current.play().catch(err => {
+        if (err.name === 'NotAllowedError') setAutoplayBlocked(true);
+      });
     }
-    // Always pipe audio through the dedicated <audio> element
+    
     if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = s;
-      remoteAudioRef.current.play().catch(() => {});
+      if (remoteAudioRef.current.srcObject !== s) {
+        remoteAudioRef.current.srcObject = s;
+      }
+      remoteAudioRef.current.play().catch(err => {
+        if (err.name === 'NotAllowedError') setAutoplayBlocked(true);
+      });
     }
+  };
+
+  const handleResumeAudio = () => {
+    setAutoplayBlocked(false);
+    if (remoteVideoRef.current) remoteVideoRef.current.play().catch(() => {});
+    if (remoteAudioRef.current) remoteAudioRef.current.play().catch(() => {});
   };
 
   const startCall = async () => {
@@ -68,10 +85,13 @@ export default function CallWindow({ remoteUser, callType, isInitiator, socket, 
       peerRef.current = peer;
       stream.getTracks().forEach(t => peer.addTrack(t, stream));
 
-      // KEY FIX: use event.track to build MediaStream incrementally
       peer.ontrack = (e) => {
-        if (!remoteStream.current.getTracks().find(t => t.id === e.track.id)) {
-          remoteStream.current.addTrack(e.track);
+        if (!remoteStreamRef.current) {
+          remoteStreamRef.current = e.streams[0] || new MediaStream([e.track]);
+        } else {
+          if (!remoteStreamRef.current.getTracks().find(t => t.id === e.track.id)) {
+            remoteStreamRef.current.addTrack(e.track);
+          }
         }
         playRemote();
         setConnected(true);
@@ -149,12 +169,11 @@ export default function CallWindow({ remoteUser, callType, isInitiator, socket, 
 
   return (
     <div className="call-window">
-      {/* Dedicated audio output — works for BOTH call types */}
-      <audio ref={remoteAudioRef} autoPlay playsInline style={{ position:'absolute', width:0, height:0, opacity:0 }} />
+      <audio ref={remoteAudioRef} autoPlay playsInline muted={false} style={{ position:'absolute', width:0, height:0, opacity:0, pointerEvents: 'none' }} />
 
       {callType === 'video' ? (
         <div className="video-container">
-          <video ref={remoteVideoRef} autoPlay playsInline className="remote-video" />
+          <video ref={remoteVideoRef} autoPlay playsInline muted={false} className="remote-video" />
           <video ref={localVideoRef}  autoPlay playsInline muted className="local-video" />
           {!connected && (
             <div className="video-connecting-overlay">
@@ -171,6 +190,15 @@ export default function CallWindow({ remoteUser, callType, isInitiator, socket, 
               {[...Array(5)].map((_, i) => <div key={i} className="wave-bar" style={{ animationDelay:`${i*0.15}s` }} />)}
             </div>
           )}
+        </div>
+      )}
+
+      {autoplayBlocked && (
+        <div className="autoplay-blocked-overlay" onClick={handleResumeAudio}>
+          <div className="autoplay-blocked-card">
+            <MdVolumeUp size={48} color="#8b5cf6" />
+            <p>Click to join audio</p>
+          </div>
         </div>
       )}
 

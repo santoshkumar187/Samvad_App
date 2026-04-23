@@ -7,8 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const { v2: cloudinary } = require('cloudinary');
 const { initDB, getPool } = require('./db');
 
 // Configure Cloudinary
@@ -55,32 +54,42 @@ app.use(express.static(path.join(__dirname, '../frontend/dist')));
 //   res.send('Hello! The Samvad App Server is working.');
 // });
 
-// Configure Multer with Cloudinary Storage
-const cloudinaryStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    let resourceType = 'auto';
-    let folder = 'samvad/files';
-    if (file.mimetype.startsWith('image/')) folder = 'samvad/images';
-    else if (file.mimetype.startsWith('video/')) folder = 'samvad/videos';
-    else if (file.mimetype.startsWith('audio/')) folder = 'samvad/audio';
-    return {
-      folder: folder,
-      resource_type: resourceType,
-      public_id: `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.]/g, '_')}`
-    };
-  }
-});
-const upload = multer({ storage: cloudinaryStorage });
+// Multer: store files in memory, then stream to Cloudinary
+const upload = multer({ storage: multer.memoryStorage() });
 
-app.post('/api/upload', upload.single('file'), (req, res) => {
+// Helper: upload a buffer to Cloudinary
+const uploadToCloudinary = (buffer, options) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
+      if (error) reject(error);
+      else resolve(result);
+    });
+    stream.end(buffer);
+  });
+};
+
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).send({ error: 'No file uploaded.' });
   }
-  // Cloudinary returns the full secure URL and resource type
-  const url = req.file.path; // Cloudinary secure_url
-  const type = req.file.mimetype;
-  res.json({ url, type });
+  try {
+    let folder = 'samvad/files';
+    let resourceType = 'auto';
+    const mime = req.file.mimetype;
+    if (mime.startsWith('image/')) folder = 'samvad/images';
+    else if (mime.startsWith('video/')) folder = 'samvad/videos';
+    else if (mime.startsWith('audio/')) folder = 'samvad/audio';
+
+    const result = await uploadToCloudinary(req.file.buffer, {
+      folder,
+      resource_type: resourceType,
+      public_id: `${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9.]/g, '_')}`
+    });
+    res.json({ url: result.secure_url, type: mime });
+  } catch (err) {
+    console.error('Cloudinary upload error:', err);
+    res.status(500).json({ error: 'Upload failed.' });
+  }
 });
 
 app.post('/api/register', async (req, res) => {

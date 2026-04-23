@@ -533,6 +533,47 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── WebRTC Call Signaling ──────────────────────────────────────
+  socket.on('call_user', ({ to, signal, callType }) => {
+    const receiverSocketId = connectedUsers.get(to);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit('incoming_call', {
+        from: socket.userId,
+        signal,
+        callType
+      });
+    }
+  });
+
+  socket.on('accept_call', ({ to, signal }) => {
+    const callerSocketId = connectedUsers.get(to);
+    if (callerSocketId) {
+      io.to(callerSocketId).emit('call_accepted', { signal });
+    }
+  });
+
+  socket.on('reject_call', ({ to }) => {
+    const callerSocketId = connectedUsers.get(to);
+    if (callerSocketId) {
+      io.to(callerSocketId).emit('call_rejected');
+    }
+  });
+
+  socket.on('end_call', ({ to }) => {
+    const otherSocketId = connectedUsers.get(to);
+    if (otherSocketId) {
+      io.to(otherSocketId).emit('call_ended');
+    }
+  });
+
+  socket.on('ice_candidate', ({ to, candidate }) => {
+    const otherSocketId = connectedUsers.get(to);
+    if (otherSocketId) {
+      io.to(otherSocketId).emit('ice_candidate', { candidate });
+    }
+  });
+  // ──────────────────────────────────────────────────────────────
+
   socket.on('disconnect', async () => {
     console.log('User disconnected:', socket.id);
     if (socket.userId) {

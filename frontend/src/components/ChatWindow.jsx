@@ -7,7 +7,7 @@ import {
   MdPalette, MdPhotoLibrary
 } from 'react-icons/md'
 
-export default function ChatWindow({ currentUser, selectedUser, messages, onSendMessage, serverUrl, onBack, onClearChat, onDeleteMessage, onReactMessage, onPinMessage, onReplyMessage, onForwardMessage, isSidebarHidden, onToggleSidebar, isTyping, onViewImage }) {
+export default function ChatWindow({ currentUser, selectedUser, messages, onSendMessage, serverUrl, onBack, onClearChat, onDeleteMessage, onReactMessage, onPinMessage, onReplyMessage, onForwardMessage, isSidebarHidden, onToggleSidebar, isTyping, onViewImage, onStartCall }) {
   const [showMenu, setShowMenu] = useState(false)
   const [activeMessageMenu, setActiveMessageMenu] = useState(null)
   const [reactionMenuId, setReactionMenuId] = useState(null)
@@ -60,7 +60,7 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
 
     try {
       const res = await axios.post(`${serverUrl}/api/upload`, formData);
-      const url = `${serverUrl}${res.data.url}`;
+      const url = res.data.url.startsWith('http') ? res.data.url : `${serverUrl}${res.data.url}`;
       setCustomWallpaperUrl(url);
       localStorage.setItem('samvad_custom_wallpaper', url);
       setChatTheme('custom');
@@ -188,26 +188,28 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
       case 'image':
         return (
           <img 
-            src={`${serverUrl}${msg.file_url}`} 
+            src={msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`}
             alt="sent image" 
             className="message-image" 
             onClick={(e) => {
               e.stopPropagation();
-              onViewImage(`${serverUrl}${msg.file_url}`);
+              const src = msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`;
+              onViewImage(src);
             }}
           />
         )
       case 'video':
-        return <video src={`${serverUrl}${msg.file_url}`} controls className="message-video" />
+        return <video src={msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`} controls className="message-video" />
       case 'audio':
-        return <audio src={`${serverUrl}${msg.file_url}`} controls className="message-audio" />
+        return <audio src={msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`} controls className="message-audio" />
       case 'file':
         return (
           <div 
             className="file-message-card" 
             onClick={(e) => {
               e.stopPropagation();
-              window.open(`${serverUrl}${msg.file_url}`, '_blank');
+              const src = msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`;
+              window.open(src, '_blank');
             }}
           >
             <div className="file-icon">
@@ -265,10 +267,10 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
           <MdArrowBack />
         </div>
         <div className="user-avatar" 
-          onClick={() => selectedUser.profile_pic && onViewImage(`${serverUrl}${selectedUser.profile_pic}`)}
+          onClick={() => selectedUser.profile_pic && onViewImage(selectedUser.profile_pic.startsWith('http') ? selectedUser.profile_pic : `${serverUrl}${selectedUser.profile_pic}`)}
           style={{width: '40px', height:'40px', fontSize:'1.1rem', margin:0, background: 'var(--brand-violet)', cursor: 'pointer'}}>
           {selectedUser.profile_pic ? (
-            <img src={`${serverUrl}${selectedUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            <img src={selectedUser.profile_pic.startsWith('http') ? selectedUser.profile_pic : `${serverUrl}${selectedUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
           ) : (
             selectedUser.username.charAt(0).toUpperCase()
           )}
@@ -278,6 +280,12 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
           <span style={{ textTransform: 'lowercase' }}>{selectedUser.online ? 'Online' : formatLastSeen(selectedUser.last_seen)}</span>
         </div>
         <div className="chat-header-actions" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div className="header-action-btn" onClick={() => onStartCall('audio')} title="Audio Call" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <MdCall size={22} />
+          </div>
+          <div className="header-action-btn" onClick={() => onStartCall('video')} title="Video Call" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <MdVideocam size={22} />
+          </div>
           <div className="header-action-btn desktop-only" onClick={onToggleSidebar} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }} title={isSidebarHidden ? "Exit Fullscreen" : "Fullscreen Chat"}>
             {isSidebarHidden ? <MdFullscreenExit size={24} /> : <MdFullscreen size={24} />}
           </div>

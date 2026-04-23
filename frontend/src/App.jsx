@@ -4,6 +4,8 @@ import axios from 'axios'
 import UserList from './components/UserList'
 import ChatWindow from './components/ChatWindow'
 import MessageInput from './components/MessageInput'
+import CallModal from './components/CallModal'
+import CallWindow from './components/CallWindow'
 import { MdVisibility, MdVisibilityOff, MdChatBubble, MdPerson, MdEmail, MdLock, MdCall } from 'react-icons/md'
 import { FaGoogle, FaApple } from 'react-icons/fa'
 
@@ -41,6 +43,10 @@ function App() {
   const [isSidebarHidden, setIsSidebarHidden] = useState(false)
   const [typingUserId, setTypingUserId] = useState(null)
   const [viewingImageUrl, setViewingImageUrl] = useState(null)
+
+  // Call state
+  const [incomingCall, setIncomingCall] = useState(null)  // { from, signal, callType, caller }
+  const [activeCall, setActiveCall] = useState(null)      // { remoteUser, callType, isInitiator, signal }
 
   // Persistent Auth
   useEffect(() => {
@@ -154,6 +160,24 @@ function App() {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, is_pinned: isPinned } : m))
     })
 
+    // ── Call Events ────────────────────────────────────
+    socketInstance.on('incoming_call', async ({ from, signal, callType }) => {
+      // Find caller info from friends list
+      const callerUser = users.find(u => u.id === from);
+      if (!callerUser) return; // Reject if not a friend
+      setIncomingCall({ from, signal, callType, caller: callerUser });
+    });
+
+    socketInstance.on('call_rejected', () => {
+      setActiveCall(null);
+      alert('Call was rejected.');
+    });
+
+    socketInstance.on('call_ended', () => {
+      setActiveCall(null);
+    });
+    // ──────────────────────────────────────────────────
+
     return () => {
       socketInstance.off('user_status_change')
       socketInstance.off('receive_message')
@@ -165,6 +189,9 @@ function App() {
       socketInstance.off('user_stopped_typing')
       socketInstance.off('message_pinned')
       socketInstance.off('messages_read')
+      socketInstance.off('incoming_call')
+      socketInstance.off('call_rejected')
+      socketInstance.off('call_ended')
     }
   }, [currentUser, socketInstance, selectedUser, typingUserId])
 
@@ -343,6 +370,38 @@ function App() {
     }
   }
 
+  // ── Call Handlers ──────────────────────────────────────────────
+  const handleStartCall = (callType) => {
+    if (!selectedUser || !socketInstance) return;
+    if (!selectedUser.online) {
+      alert(`${selectedUser.username} is offline. You can only call online users.`);
+      return;
+    }
+    setActiveCall({ remoteUser: selectedUser, callType, isInitiator: true, signal: null });
+  };
+
+  const handleAcceptCall = () => {
+    if (!incomingCall) return;
+    setActiveCall({
+      remoteUser: incomingCall.caller,
+      callType: incomingCall.callType,
+      isInitiator: false,
+      signal: incomingCall.signal
+    });
+    setIncomingCall(null);
+  };
+
+  const handleRejectCall = () => {
+    if (!incomingCall || !socketInstance) return;
+    socketInstance.emit('reject_call', { to: incomingCall.from });
+    setIncomingCall(null);
+  };
+
+  const handleEndCall = () => {
+    setActiveCall(null);
+  };
+  // ──────────────────────────────────────────────────────────────
+
   if (!currentUser) {
     return (
       <div className="login-screen">
@@ -463,6 +522,7 @@ function App() {
           onToggleSidebar={() => setIsSidebarHidden(!isSidebarHidden)}
           isTyping={typingUserId === selectedUser?.id}
           onViewImage={setViewingImageUrl}
+          onStartCall={handleStartCall}
         />
         {selectedUser && (
           <MessageInput 
@@ -492,6 +552,29 @@ function App() {
             <button className="cancel-btn" onClick={() => setForwardingMessage(null)}>Cancel</button>
           </div>
         </div>
+      )}
+
+      {/* Incoming Call Modal */}
+      {incomingCall && !activeCall && (
+        <CallModal
+          caller={incomingCall.caller}
+          callType={incomingCall.callType}
+          onAccept={handleAcceptCall}
+          onReject={handleRejectCall}
+        />
+      )}
+
+      {/* Active Call Window */}
+      {activeCall && socketInstance && (
+        <CallWindow
+          currentUser={currentUser}
+          remoteUser={activeCall.remoteUser}
+          callType={activeCall.callType}
+          isInitiator={activeCall.isInitiator}
+          socket={socketInstance}
+          incomingSignal={activeCall.signal}
+          onEndCall={handleEndCall}
+        />
       )}
 
       {viewingImageUrl && (

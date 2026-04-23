@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { io } from 'socket.io-client'
 import axios from 'axios'
 import UserList from './components/UserList'
@@ -45,8 +45,12 @@ function App() {
   const [viewingImageUrl, setViewingImageUrl] = useState(null)
 
   // Call state
-  const [incomingCall, setIncomingCall] = useState(null)  // { from, signal, callType, caller }
-  const [activeCall, setActiveCall] = useState(null)      // { remoteUser, callType, isInitiator, signal }
+  const [incomingCall, setIncomingCall] = useState(null)
+  const [activeCall, setActiveCall] = useState(null)
+
+  // Ref to always have the latest users list (avoids stale closure in socket handlers)
+  const usersRef = useRef([])
+  useEffect(() => { usersRef.current = users }, [users])
 
   // Persistent Auth
   useEffect(() => {
@@ -161,11 +165,15 @@ function App() {
     })
 
     // ── Call Events ────────────────────────────────────
-    socketInstance.on('incoming_call', async ({ from, signal, callType }) => {
-      // Find caller info from friends list
-      const callerUser = users.find(u => u.id === from);
-      if (!callerUser) return; // Reject if not a friend
-      setIncomingCall({ from, signal, callType, caller: callerUser });
+    socketInstance.on('incoming_call', ({ from, signal, callType }) => {
+      // Use usersRef to avoid stale closure. Also fix type: socket userId is string, DB id is number.
+      const callerUser = usersRef.current.find(u => Number(u.id) === Number(from));
+      if (!callerUser) {
+        // Not in friends list or friends not loaded — still show call with basic info
+        setIncomingCall({ from: Number(from), signal, callType, caller: { id: Number(from), username: 'Unknown' } });
+        return;
+      }
+      setIncomingCall({ from: Number(from), signal, callType, caller: callerUser });
     });
 
     socketInstance.on('call_rejected', () => {

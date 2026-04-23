@@ -68,12 +68,12 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
           style={{ margin: 0, width: '38px', height: '38px', fontSize: '1rem', background: '#333', cursor: 'pointer' }}
           onClick={(e) => {
             e.stopPropagation();
-            if (currentUser.profile_pic) onViewImage(`${serverUrl}${currentUser.profile_pic}`);
+            if (currentUser.profile_pic) onViewImage(currentUser.profile_pic.startsWith('http') ? currentUser.profile_pic : `${serverUrl}${currentUser.profile_pic}`);
             else setShowProfileModal(true);
           }}
         >
           {currentUser.profile_pic ? (
-            <img src={`${serverUrl}${currentUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            <img src={currentUser.profile_pic.startsWith('http') ? currentUser.profile_pic : `${serverUrl}${currentUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
           ) : (
             currentUser.username.charAt(0).toUpperCase()
           )}
@@ -160,12 +160,12 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
                 style={{ background: getAvatarColor(user.id), cursor: 'pointer' }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (user.profile_pic) onViewImage(`${serverUrl}${user.profile_pic}`);
+                  if (user.profile_pic) onViewImage(user.profile_pic.startsWith('http') ? user.profile_pic : `${serverUrl}${user.profile_pic}`);
                   else onSelectUser(user);
                 }}
               >
                 {user.profile_pic ? (
-                  <img src={`${serverUrl}${user.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  <img src={user.profile_pic.startsWith('http') ? user.profile_pic : `${serverUrl}${user.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                 ) : (
                   user.username.charAt(0).toUpperCase()
                 )}
@@ -224,7 +224,7 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
                   {profilePicFile ? (
                     <img src={URL.createObjectURL(profilePicFile)} alt="preview" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                   ) : currentUser?.profile_pic ? (
-                    <img src={`${serverUrl}${currentUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    <img src={currentUser.profile_pic.startsWith('http') ? currentUser.profile_pic : `${serverUrl}${currentUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
                     currentUser?.username.charAt(0).toUpperCase()
                   )}

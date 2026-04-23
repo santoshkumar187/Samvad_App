@@ -7,7 +7,16 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const { initDB, getPool } = require('./db');
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 const JWT_SECRET = process.env.JWT_SECRET || 'samvad_secret_key_2024';
 
@@ -46,24 +55,32 @@ app.use(express.static(path.join(__dirname, '../frontend/dist')));
 //   res.send('Hello! The Samvad App Server is working.');
 // });
 
-// Configure Multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/')
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, uniqueFileName = uniqueSuffix + '-' + file.originalname)
+// Configure Multer with Cloudinary Storage
+const cloudinaryStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    let resourceType = 'auto';
+    let folder = 'samvad/files';
+    if (file.mimetype.startsWith('image/')) folder = 'samvad/images';
+    else if (file.mimetype.startsWith('video/')) folder = 'samvad/videos';
+    else if (file.mimetype.startsWith('audio/')) folder = 'samvad/audio';
+    return {
+      folder: folder,
+      resource_type: resourceType,
+      public_id: `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.]/g, '_')}`
+    };
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({ storage: cloudinaryStorage });
 
 app.post('/api/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).send({ error: 'No file uploaded.' });
   }
-  // Return the file URL
-  res.json({ url: `/uploads/${req.file.filename}`, type: req.file.mimetype });
+  // Cloudinary returns the full secure URL and resource type
+  const url = req.file.path; // Cloudinary secure_url
+  const type = req.file.mimetype;
+  res.json({ url, type });
 });
 
 app.post('/api/register', async (req, res) => {
@@ -146,7 +163,7 @@ app.put('/api/users/:id/profile', upload.single('profile_pic'), async (req, res)
     
     if (file) {
       updateQuery += ', profile_pic = ?';
-      params.push(`/uploads/${file.filename}`);
+      params.push(file.path); // Cloudinary secure URL
     }
     
     updateQuery += ' WHERE id = ?';

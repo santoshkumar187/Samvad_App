@@ -23,7 +23,7 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
       setIsSearching(true);
       setSearchResult(null);
       try {
-        const res = await axios.get(`${serverUrl}/api/search?samvadId=${searchId.trim()}`);
+        const res = await axios.get(`${serverUrl}/api/search?samvadId=${encodeURIComponent(searchId.trim())}`);
         setSearchResult(res.data);
       } catch (err) {
         setSearchResult({ error: 'User not found' });

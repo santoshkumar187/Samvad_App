@@ -171,8 +171,14 @@ app.put('/api/users/:id/profile', upload.single('profile_pic'), async (req, res)
     let params = [about || 'Available'];
     
     if (file) {
+      // Upload buffer to Cloudinary
+      const result = await uploadToCloudinary(file.buffer, {
+        folder: 'samvad/profiles',
+        resource_type: 'image',
+        public_id: `profile_${id}_${Date.now()}`
+      });
       updateQuery += ', profile_pic = ?';
-      params.push(file.path); // Cloudinary secure URL
+      params.push(result.secure_url);
     }
     
     updateQuery += ' WHERE id = ?';
@@ -180,10 +186,10 @@ app.put('/api/users/:id/profile', upload.single('profile_pic'), async (req, res)
     
     await pool.query(updateQuery, params);
     
-    const [rows] = await pool.query('SELECT id, username, email, online, profile_pic, about, last_seen, created_at FROM users WHERE id = ?', [id]);
+    const [rows] = await pool.query('SELECT id, username, email, samvad_id, online, profile_pic, about, last_seen, created_at FROM users WHERE id = ?', [id]);
     res.json(rows[0]);
   } catch (error) {
-    console.error(error);
+    console.error('Profile update error:', error);
     res.status(500).json({ error: 'Database error' });
   }
 });

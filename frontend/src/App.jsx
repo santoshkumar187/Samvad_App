@@ -11,6 +11,18 @@ const SERVER_URL = (window.location.hostname === 'localhost' || window.location.
   ? `http://${window.location.hostname}:3000` 
   : '';
 
+// Axios interceptor for JWT
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('samvad_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [usernameInput, setUsernameInput] = useState('')
@@ -30,10 +42,31 @@ function App() {
   const [typingUserId, setTypingUserId] = useState(null)
   const [viewingImageUrl, setViewingImageUrl] = useState(null)
 
+  // Persistent Auth
+  useEffect(() => {
+    const token = localStorage.getItem('samvad_token');
+    if (token) {
+      const verifyToken = async () => {
+        try {
+          const res = await axios.get(`${SERVER_URL}/api/auth/me`);
+          setCurrentUser(res.data);
+          
+          const newSocket = io(SERVER_URL);
+          setSocketInstance(newSocket);
+          newSocket.emit('join', res.data.id);
+        } catch (err) {
+          console.error('Session expired', err);
+          localStorage.removeItem('samvad_token');
+        }
+      };
+      verifyToken();
+    }
+  }, []);
+
   const handleAuth = async (e) => {
     e.preventDefault()
     if (!passwordInput.trim()) return
-    if (isLoginMode && !usernameInput.trim()) return // username acts as identifier here
+    if (isLoginMode && !usernameInput.trim()) return 
     if (!isLoginMode && (!usernameInput.trim() || !emailInput.trim())) return
 
     try {
@@ -43,12 +76,14 @@ function App() {
         : { username: usernameInput, email: emailInput, password: passwordInput }
         
       const res = await axios.post(`${SERVER_URL}${endpoint}`, payload)
-      setCurrentUser(res.data)
+      const { user, token } = res.data;
       
-      // Connect socket
+      setCurrentUser(user)
+      localStorage.setItem('samvad_token', token);
+      
       const newSocket = io(SERVER_URL)
       setSocketInstance(newSocket)
-      newSocket.emit('join', res.data.id)
+      newSocket.emit('join', user.id)
     } catch (err) {
       console.error('Auth failed', err)
       alert(err.response?.data?.error || 'Authentication failed')
@@ -59,16 +94,16 @@ function App() {
   useEffect(() => {
     if (!currentUser || !socketInstance) return
 
-    // Initial fetch
-    const fetchUsers = async () => {
+    // Initial fetch - only friends
+    const fetchFriends = async () => {
       try {
-        const res = await axios.get(`${SERVER_URL}/api/users`)
-        setUsers(res.data.filter(u => u.id !== currentUser.id))
+        const res = await axios.get(`${SERVER_URL}/api/friends`)
+        setUsers(res.data)
       } catch (err) {
-        console.error('Failed to load users', err)
+        console.error('Failed to load friends', err)
       }
     }
-    fetchUsers()
+    fetchFriends()
 
     // Socket events
     socketInstance.on('user_status_change', ({ userId, online, last_seen }) => {
@@ -87,13 +122,10 @@ function App() {
     })
 
     socketInstance.on('message_deleted', ({ messageId }) => {
-      console.log('Socket: message_deleted received', messageId);
       setMessages(prev => prev.filter(m => m.id !== messageId))
     })
 
     socketInstance.on('message_sent', (realMsg) => {
-      console.log('Socket: message_sent confirmed:', realMsg.correlationId, '->', realMsg.id);
-      // Find the optimistic message and update its ID using correlationId
       setMessages(prev => prev.map(m => {
         if (m.correlationId && m.correlationId === realMsg.correlationId) {
           return { ...realMsg, isOptimistic: false };
@@ -122,7 +154,6 @@ function App() {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, is_pinned: isPinned } : m))
     })
 
-    // Cleanup
     return () => {
       socketInstance.off('user_status_change')
       socketInstance.off('receive_message')
@@ -137,7 +168,6 @@ function App() {
     }
   }, [currentUser, socketInstance, selectedUser, typingUserId])
 
-  // Load chat history when selecting a user
   useEffect(() => {
     if (!currentUser || !selectedUser) return
     
@@ -173,13 +203,11 @@ function App() {
     
     socketInstance.emit('send_message', newMsg)
     
-    // Set parent info for optimistic UI
     const parentInfo = replyingTo ? {
       parent_content: replyingTo.content,
       parent_sender_name: replyingTo.sender_id === currentUser.id ? 'You' : (selectedUser.username)
     } : {};
 
-    // Optimistically update UI
     setMessages(prev => [...prev, {
       ...newMsg,
       ...parentInfo,
@@ -205,25 +233,26 @@ function App() {
     if (window.confirm('PERMANENTLY delete your account and all data? This cannot be undone.')) {
       try {
         await axios.delete(`${SERVER_URL}/api/users/${currentUser.id}`)
-        // Clear state and logout
-        setCurrentUser(null)
-        setSocketInstance(null)
-        setSelectedUser(null)
+        handleLogout()
       } catch (err) {
         alert('Failed to delete account')
       }
     }
   }
 
-  const handleDeleteMessage = async (messageId, type) => {
-    // 1. Remove from local UI immediately for 'everyone' or if 'me'
-    setMessages(prev => prev.filter(m => m.id !== messageId));
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setSocketInstance(null);
+    setSelectedUser(null);
+    localStorage.removeItem('samvad_token');
+  }
 
-    // 2. Perform backend deletion in the background
+  const handleDeleteMessage = async (messageId, type) => {
+    setMessages(prev => prev.filter(m => m.id !== messageId));
     try {
       await axios.post(`${SERVER_URL}/api/messages/${messageId}/delete`, {
         userId: currentUser.id,
-        type: type // 'me' or 'everyone'
+        type: type 
       });
     } catch (err) {
       console.error('Background delete failed:', err);
@@ -232,30 +261,17 @@ function App() {
 
   const handleReactMessage = (messageId, reaction) => {
     if (!socketInstance || !selectedUser) return;
-    
-    // Optimistic update
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reaction, react_user_id: reaction ? currentUser.id : null } : m));
-    
-    // Emit to backend
-    socketInstance.emit('react_message', { 
-      messageId, 
-      reaction, 
-      receiver_id: selectedUser.id 
-    });
+    socketInstance.emit('react_message', { messageId, reaction, receiver_id: selectedUser.id });
   }
 
   const handlePinMessage = (messageId, isPinned) => {
     if (!socketInstance || !selectedUser) return;
-    socketInstance.emit('pin_message', { 
-      messageId, 
-      isPinned, 
-      receiver_id: selectedUser.id 
-    });
+    socketInstance.emit('pin_message', { messageId, isPinned, receiver_id: selectedUser.id });
   }
 
   const handleForward = (userId) => {
     if (!forwardingMessage || !socketInstance) return;
-    
     const correlationId = `${Date.now()}-fw-${Math.random().toString(36).substr(2, 9)}`;
     const forwardedMsg = {
       sender_id: currentUser.id,
@@ -266,19 +282,10 @@ function App() {
       is_forwarded: true,
       correlationId: correlationId
     };
-
     socketInstance.emit('send_message', forwardedMsg);
-    
-    // If the receiver is the currently selected user, update UI
     if (selectedUser?.id === userId) {
-      setMessages(prev => [...prev, {
-        ...forwardedMsg,
-        id: Date.now(),
-        timestamp: new Date().toISOString(),
-        isOptimistic: true
-      }]);
+      setMessages(prev => [...prev, { ...forwardedMsg, id: Date.now(), timestamp: new Date().toISOString(), isOptimistic: true }]);
     }
-    
     setForwardingMessage(null);
     alert('Message forwarded!');
   }
@@ -287,7 +294,6 @@ function App() {
     if (window.confirm(`PERMANENTLY delete account "${targetUsername}" and all their data? This cannot be undone.`)) {
       try {
         await axios.delete(`${SERVER_URL}/api/users/${userId}`);
-        // The UI will update via the 'user_deleted' socket event already implemented
       } catch (err) {
         alert('Failed to delete specific account');
       }
@@ -299,26 +305,16 @@ function App() {
       alert('Please select a chat first to send a photo.')
       return
     }
-
     const formData = new FormData()
     formData.append('file', file)
-
     try {
-      const res = await axios.post(`${SERVER_URL}/api/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
-      
+      const res = await axios.post(`${SERVER_URL}/api/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       const { url, type } = res.data
       let msgType = 'file'
       if (type.startsWith('image/')) msgType = 'image'
       else if (type.startsWith('audio/')) msgType = 'audio'
       else if (type.startsWith('video/')) msgType = 'video'
-      
-      handleSendMessage({
-        content: file.name,
-        type: msgType,
-        file_url: url
-      })
+      handleSendMessage({ content: file.name, type: msgType, file_url: url })
     } catch (err) {
       console.error('Camera upload failed', err)
       alert('Failed to upload camera photo.')
@@ -327,14 +323,23 @@ function App() {
 
   const handleProfileUpdate = async (formData) => {
     try {
-      const res = await axios.put(`${SERVER_URL}/api/users/${currentUser.id}/profile`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+      const res = await axios.put(`${SERVER_URL}/api/users/${currentUser.id}/profile`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       setCurrentUser(res.data)
       alert('Profile updated successfully!')
     } catch (err) {
       console.error('Profile update failed', err)
       alert('Failed to update profile.')
+    }
+  }
+
+  const handleAddFriend = async (friendId) => {
+    try {
+      await axios.post(`${SERVER_URL}/api/friends/add`, { friendId });
+      const res = await axios.get(`${SERVER_URL}/api/friends`);
+      setUsers(res.data);
+      alert('Friend added!');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to add friend');
     }
   }
 
@@ -360,7 +365,7 @@ function App() {
               <input 
                 type="text" 
                 className="input-field" 
-                placeholder={isLoginMode ? "Email or Username" : "Enter Username"} 
+                placeholder={isLoginMode ? "Email, Username or samvadId" : "Enter Username"} 
                 value={usernameInput}
                 onChange={e => setUsernameInput(e.target.value)}
                 autoFocus
@@ -430,16 +435,13 @@ function App() {
           selectedUser={selectedUser}
           onSelectUser={setSelectedUser} 
           onDeleteAccount={handleDeleteAccount}
-          onLogout={() => {
-            setCurrentUser(null);
-            setSocketInstance(null);
-            setSelectedUser(null);
-          }}
+          onLogout={handleLogout}
           onDeleteSpecificUser={handleDeleteSpecificUser}
           onCameraClick={handleCameraUpload}
           onProfileUpdate={handleProfileUpdate}
           serverUrl={SERVER_URL}
           onViewImage={setViewingImageUrl}
+          onAddFriend={handleAddFriend}
         />
       </div>
       
@@ -492,7 +494,6 @@ function App() {
         </div>
       )}
 
-      {/* Global Full Screen Image Viewer */}
       {viewingImageUrl && (
         <div className="image-viewer-overlay" onClick={() => setViewingImageUrl(null)}>
           <div className="image-viewer-close" onClick={(e) => { e.stopPropagation(); setViewingImageUrl(null); }}>&times;</div>

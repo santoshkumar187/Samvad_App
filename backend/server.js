@@ -6,7 +6,23 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { initDB, getPool } = require('./db');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'samvad_secret_key_2024';
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
 
 const app = express();
 const server = http.createServer(app);
@@ -60,10 +76,19 @@ app.post('/api/register', async (req, res) => {
     if (rows.length > 0) return res.status(400).json({ error: 'Username or email already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const [result] = await pool.query('INSERT INTO users (username, email, password) VALUES (?, ?, ?)', [username, email, hashedPassword]);
+    // Generate unique samvad_id
+    const samvadId = `${username.toLowerCase()}#${Math.floor(1000 + Math.random() * 9000)}`;
     
-    const [newRows] = await pool.query('SELECT id, username, email, online, profile_pic, about, last_seen, created_at FROM users WHERE id = ?', [result.insertId]);
-    res.json(newRows[0]);
+    const [result] = await pool.query(
+      'INSERT INTO users (username, email, password, samvad_id) VALUES (?, ?, ?, ?)', 
+      [username, email, hashedPassword, samvadId]
+    );
+    
+    const [newRows] = await pool.query('SELECT id, username, email, samvad_id, online, profile_pic, about, last_seen, created_at FROM users WHERE id = ?', [result.insertId]);
+    const user = newRows[0];
+    
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
+    res.json({ user, token });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Database error' });
@@ -76,24 +101,35 @@ app.post('/api/login', async (req, res) => {
 
   try {
     const pool = getPool();
-    let [rows] = await pool.query('SELECT * FROM users WHERE username = ? OR email = ?', [identifier, identifier]);
+    let [rows] = await pool.query('SELECT * FROM users WHERE username = ? OR email = ? OR samvad_id = ?', [identifier, identifier, identifier]);
     
     if (rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid username or password' });
+      return res.status(401).json({ error: 'Invalid identifier or password' });
     }
     
     const user = rows[0];
     const passwordMatch = await bcrypt.compare(password, user.password);
     
     if (!passwordMatch) {
-      return res.status(401).json({ error: 'Invalid username or password' });
+      return res.status(401).json({ error: 'Invalid identifier or password' });
     }
     
-    // Return user without password
     const { password: _, ...userWithoutPassword } = user;
-    res.json(userWithoutPassword);
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
+    res.json({ user: userWithoutPassword, token });
   } catch (error) {
     console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const pool = getPool();
+    const [rows] = await pool.query('SELECT id, username, email, samvad_id, online, profile_pic, about, last_seen, created_at FROM users WHERE id = ?', [req.user.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(rows[0]);
+  } catch (error) {
     res.status(500).json({ error: 'Database error' });
   }
 });
@@ -126,11 +162,63 @@ app.put('/api/users/:id/profile', upload.single('profile_pic'), async (req, res)
   }
 });
 
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
-    const [rows] = await pool.query('SELECT id, username, online, profile_pic, about, last_seen FROM users ORDER BY username ASC');
+    const [rows] = await pool.query('SELECT id, username, samvad_id, online, profile_pic, about, last_seen FROM users ORDER BY username ASC');
     res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.get('/api/search', authenticateToken, async (req, res) => {
+  const { samvadId } = req.query;
+  if (!samvadId) return res.status(400).json({ error: 'samvadId required' });
+
+  try {
+    const pool = getPool();
+    const [rows] = await pool.query(
+      'SELECT id, username, samvad_id, profile_pic, about, online FROM users WHERE samvad_id = ?', 
+      [samvadId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.get('/api/friends', authenticateToken, async (req, res) => {
+  try {
+    const pool = getPool();
+    const [rows] = await pool.query(`
+      SELECT u.id, u.username, u.samvad_id, u.online, u.profile_pic, u.about, u.last_seen 
+      FROM users u
+      JOIN friends f ON (u.id = f.friend_id AND f.user_id = ?) OR (u.id = f.user_id AND f.friend_id = ?)
+      WHERE u.id != ?
+      GROUP BY u.id
+    `, [req.user.id, req.user.id, req.user.id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/friends/add', authenticateToken, async (req, res) => {
+  const { friendId } = req.body;
+  if (!friendId) return res.status(400).json({ error: 'friendId required' });
+
+  try {
+    const pool = getPool();
+    // Check if already friends
+    const [existing] = await pool.query('SELECT * FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)', 
+      [req.user.id, friendId, friendId, req.user.id]);
+    
+    if (existing.length > 0) return res.status(400).json({ error: 'Already friends' });
+
+    await pool.query('INSERT INTO friends (user_id, friend_id) VALUES (?, ?)', [req.user.id, friendId]);
+    res.json({ message: 'Friend added' });
   } catch (error) {
     res.status(500).json({ error: 'Database error' });
   }
@@ -267,9 +355,20 @@ io.on('connection', (socket) => {
     try {
       const pool = getPool();
       await pool.query('UPDATE users SET online = true WHERE id = ?', [userId]);
-      io.emit('user_status_change', { userId, online: true });
       
-      // Update any pending delivered messages to the user if needed (can be handled by mark_messages_read from client)
+      // Get friends to notify
+      const [friends] = await pool.query(`
+        SELECT CASE WHEN user_id = ? THEN friend_id ELSE user_id END as friend_id 
+        FROM friends WHERE user_id = ? OR friend_id = ?
+      `, [userId, userId, userId]);
+
+      friends.forEach(f => {
+        const friendSocketId = connectedUsers.get(f.friend_id);
+        if (friendSocketId) {
+          io.to(friendSocketId).emit('user_status_change', { userId, online: true });
+        }
+      });
+      
     } catch(err) {
       console.error(err);
     }
@@ -405,12 +504,25 @@ io.on('connection', (socket) => {
   socket.on('disconnect', async () => {
     console.log('User disconnected:', socket.id);
     if (socket.userId) {
-      connectedUsers.delete(socket.userId);
+      const userId = socket.userId;
+      connectedUsers.delete(userId);
       try {
         const pool = getPool();
         const now = new Date();
-        await pool.query('UPDATE users SET online = false, last_seen = ? WHERE id = ?', [now, socket.userId]);
-        io.emit('user_status_change', { userId: socket.userId, online: false, last_seen: now });
+        await pool.query('UPDATE users SET online = false, last_seen = ? WHERE id = ?', [now, userId]);
+        
+        // Get friends to notify
+        const [friends] = await pool.query(`
+          SELECT CASE WHEN user_id = ? THEN friend_id ELSE user_id END as friend_id 
+          FROM friends WHERE user_id = ? OR friend_id = ?
+        `, [userId, userId, userId]);
+
+        friends.forEach(f => {
+          const friendSocketId = connectedUsers.get(f.friend_id);
+          if (friendSocketId) {
+            io.to(friendSocketId).emit('user_status_change', { userId, online: false, last_seen: now });
+          }
+        });
       } catch(err) {
         console.error(err);
       }

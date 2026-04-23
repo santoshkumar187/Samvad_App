@@ -1,4 +1,5 @@
 import React from 'react'
+import axios from 'axios'
 import { MdSearch, MdOutlineCameraAlt, MdOutlineEdit, MdDoneAll, MdMoreVert, MdLogout, MdDeleteSweep } from 'react-icons/md'
 
 const AVATAR_COLORS = [
@@ -6,13 +7,37 @@ const AVATAR_COLORS = [
   '#335c5c', '#6b4f3b', '#485e6b', '#5c4e4e'
 ];
 
-export default function UserList({ currentUser, users, selectedUser, onSelectUser, onDeleteAccount, onLogout, onDeleteSpecificUser, onCameraClick, onProfileUpdate, serverUrl, onViewImage }) {
+export default function UserList({ currentUser, users, selectedUser, onSelectUser, onDeleteAccount, onLogout, onDeleteSpecificUser, onCameraClick, onProfileUpdate, serverUrl, onViewImage, onAddFriend }) {
   const [showSettings, setShowSettings] = React.useState(false);
   const [showProfileModal, setShowProfileModal] = React.useState(false);
   const [aboutText, setAboutText] = React.useState(currentUser?.about || 'Available');
   const [profilePicFile, setProfilePicFile] = React.useState(null);
+  const [searchId, setSearchId] = React.useState('');
+  const [searchResult, setSearchResult] = React.useState(null);
+  const [isSearching, setIsSearching] = React.useState(false);
   const cameraInputRef = React.useRef(null);
   const profilePicInputRef = React.useRef(null);
+
+  const handleSearch = async (e) => {
+    if (e.key === 'Enter' && searchId.trim()) {
+      setIsSearching(true);
+      setSearchResult(null);
+      try {
+        const res = await axios.get(`${serverUrl}/api/search?samvadId=${searchId.trim()}`);
+        setSearchResult(res.data);
+      } catch (err) {
+        setSearchResult({ error: 'User not found' });
+      } finally {
+        setIsSearching(false);
+      }
+    }
+  };
+
+  const handleAddFriendClick = (friendId) => {
+    if (onAddFriend) onAddFriend(friendId);
+    setSearchResult(null);
+    setSearchId('');
+  };
   
   const handleProfileSubmit = (e) => {
     e.preventDefault();
@@ -55,7 +80,13 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
         </div>
         <div className="search-bar">
           <MdSearch size={22} color="#8e8e93" />
-          <input type="text" placeholder="Search" />
+          <input 
+            type="text" 
+            placeholder="Search samvadId (e.g. user#1234)" 
+            value={searchId}
+            onChange={e => setSearchId(e.target.value)}
+            onKeyDown={handleSearch}
+          />
         </div>
         <div className="settings-trigger" style={{ position: 'relative' }}>
           <MdMoreVert 
@@ -80,6 +111,39 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
         </div>
       </div>
       
+      {searchResult && (
+        <div className="search-results-section" style={{ padding: '10px', borderBottom: '1px solid #222', background: '#111' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+            <span style={{ fontSize: '0.8rem', color: '#888' }}>SEARCH RESULT</span>
+            <span style={{ fontSize: '0.8rem', color: '#888', cursor: 'pointer' }} onClick={() => setSearchResult(null)}>Close</span>
+          </div>
+          {searchResult.error ? (
+            <p style={{ fontSize: '0.9rem', color: '#eb5757' }}>{searchResult.error}</p>
+          ) : (
+            <div className="user-item" style={{ background: '#1a1a1a', borderRadius: '10px', padding: '10px' }}>
+              <div className="user-avatar" style={{ background: getAvatarColor(searchResult.id) }}>
+                {searchResult.profile_pic ? (
+                  <img src={`${serverUrl}${searchResult.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  searchResult.username.charAt(0).toUpperCase()
+                )}
+              </div>
+              <div className="user-info">
+                <h4>{searchResult.username}</h4>
+                <p style={{ fontSize: '0.8rem' }}>{searchResult.samvad_id}</p>
+              </div>
+              <button 
+                className="primary-btn" 
+                style={{ padding: '5px 10px', fontSize: '0.8rem', width: 'auto' }}
+                onClick={() => handleAddFriendClick(searchResult.id)}
+              >
+                Connect
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="users-container">
         {users.length === 0 ? (
           <p style={{ textAlign: 'center', color: 'var(--signal-text-muted)', marginTop: '2rem' }}>
@@ -153,6 +217,7 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
         <div className="forward-modal-overlay" onClick={() => setShowProfileModal(false)}>
           <div className="forward-modal" onClick={e => e.stopPropagation()}>
             <h3>Edit Profile</h3>
+            <p style={{ color: '#888', fontSize: '0.9rem', marginTop: '5px' }}>Your samvadId: <strong style={{ color: 'var(--signal-blue)' }}>{currentUser?.samvad_id}</strong></p>
             <form onSubmit={handleProfileSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <div className="user-avatar" style={{ width: '60px', height: '60px', fontSize: '1.5rem', background: '#333' }}>

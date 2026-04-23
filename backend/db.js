@@ -51,11 +51,23 @@ async function initDB() {
         username VARCHAR(255) NOT NULL UNIQUE,
         email VARCHAR(255) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
+        samvad_id VARCHAR(50) UNIQUE,
         profile_pic VARCHAR(255),
         about VARCHAR(255),
         online BOOLEAN DEFAULT false,
         last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS friends (
+        user_id INT,
+        friend_id INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, friend_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (friend_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
 
@@ -84,10 +96,19 @@ async function initDB() {
 
     console.log('Database tables initialized successfully.');
 
-    // Migration checks (email column, etc.)
-    const [userCols] = await pool.query("SHOW COLUMNS FROM users LIKE 'email'");
+    // Migration checks
+    const [userCols] = await pool.query("SHOW COLUMNS FROM users LIKE 'samvad_id'");
     if (userCols.length === 0) {
-      await pool.query("ALTER TABLE users ADD COLUMN email VARCHAR(255) NOT NULL UNIQUE AFTER username");
+      console.log('Migrating: Adding samvad_id column...');
+      await pool.query("ALTER TABLE users ADD COLUMN samvad_id VARCHAR(50) UNIQUE AFTER password");
+      
+      // Generate samvad_id for existing users
+      const [users] = await pool.query("SELECT id, username FROM users WHERE samvad_id IS NULL");
+      for (const user of users) {
+        const sid = `${user.username.toLowerCase()}#${Math.floor(1000 + Math.random() * 9000)}`;
+        await pool.query("UPDATE users SET samvad_id = ? WHERE id = ?", [sid, user.id]);
+      }
+      console.log(`Migrated ${users.length} users with new samvad_id.`);
     }
 
     const [msgCols] = await pool.query("SHOW COLUMNS FROM messages LIKE 'is_pinned'");

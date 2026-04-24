@@ -209,7 +209,14 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
             onClick={(e) => {
               e.stopPropagation();
               const src = msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`;
-              window.open(src, '_blank');
+              const fileName = msg.content || '';
+              const isDocument = /\\.(pdf|doc|docx|ppt|pptx|xls|xlsx|txt|csv)$/i.test(fileName);
+              
+              if (isDocument) {
+                window.open(`https://docs.google.com/viewer?url=${encodeURIComponent(src)}`, '_blank');
+              } else {
+                window.open(src, '_blank');
+              }
             }}
           >
             <div className="file-icon">
@@ -217,7 +224,7 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
             </div>
             <div className="file-info">
               <span className="file-name">{msg.content}</span>
-              <span className="file-size-tap">Tap to download</span>
+              <span className="file-size-tap">Tap to open</span>
             </div>
           </div>
         )

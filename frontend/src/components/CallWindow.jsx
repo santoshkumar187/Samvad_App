@@ -48,18 +48,16 @@ export default function CallWindow({ remoteUser, callType, isInitiator, socket, 
     if (!s) return;
 
     if (callType === 'video' && remoteVideoRef.current) {
-      if (remoteVideoRef.current.srcObject !== s) {
-        remoteVideoRef.current.srcObject = s;
-      }
+      // Force re-assignment to ensure tracks update correctly
+      remoteVideoRef.current.srcObject = null;
+      remoteVideoRef.current.srcObject = s;
       remoteVideoRef.current.play().catch(err => {
         if (err.name === 'NotAllowedError') setAutoplayBlocked(true);
       });
-    }
-    
-    if (remoteAudioRef.current) {
-      if (remoteAudioRef.current.srcObject !== s) {
-        remoteAudioRef.current.srcObject = s;
-      }
+    } else if (callType === 'audio' && remoteAudioRef.current) {
+      // Force re-assignment for audio only calls
+      remoteAudioRef.current.srcObject = null;
+      remoteAudioRef.current.srcObject = s;
       remoteAudioRef.current.play().catch(err => {
         if (err.name === 'NotAllowedError') setAutoplayBlocked(true);
       });
@@ -86,12 +84,13 @@ export default function CallWindow({ remoteUser, callType, isInitiator, socket, 
       stream.getTracks().forEach(t => peer.addTrack(t, stream));
 
       peer.ontrack = (e) => {
-        if (!remoteStreamRef.current) {
-          remoteStreamRef.current = e.streams[0] || new MediaStream([e.track]);
+        if (e.streams && e.streams[0]) {
+          remoteStreamRef.current = e.streams[0];
         } else {
-          if (!remoteStreamRef.current.getTracks().find(t => t.id === e.track.id)) {
-            remoteStreamRef.current.addTrack(e.track);
+          if (!remoteStreamRef.current) {
+            remoteStreamRef.current = new MediaStream();
           }
+          remoteStreamRef.current.addTrack(e.track);
         }
         playRemote();
         setConnected(true);
@@ -169,7 +168,9 @@ export default function CallWindow({ remoteUser, callType, isInitiator, socket, 
 
   return (
     <div className="call-window">
-      <audio ref={remoteAudioRef} autoPlay playsInline muted={false} style={{ position:'absolute', width:0, height:0, opacity:0, pointerEvents: 'none' }} />
+      {callType === 'audio' && (
+        <audio ref={remoteAudioRef} autoPlay playsInline muted={false} />
+      )}
 
       {callType === 'video' ? (
         <div className="video-container">

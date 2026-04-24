@@ -4,7 +4,7 @@ import {
   MdChat, MdVideocam, MdCall, MdMoreVert, MdArrowBack, MdDoneAll, MdCheck,
   MdDeleteOutline, MdReply, MdForward, MdContentCopy, MdCheckCircleOutline, 
   MdInfoOutline, MdPushPin, MdFullscreen, MdFullscreenExit, MdInsertDriveFile,
-  MdPalette, MdPhotoLibrary
+  MdPalette, MdPhotoLibrary, MdClose
 } from 'react-icons/md'
 
 export default function ChatWindow({ currentUser, selectedUser, messages, onSendMessage, serverUrl, onBack, onClearChat, onDeleteMessage, onReactMessage, onPinMessage, onReplyMessage, onForwardMessage, isSidebarHidden, onToggleSidebar, isTyping, onViewImage, onStartCall }) {
@@ -12,6 +12,7 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
   const [activeMessageMenu, setActiveMessageMenu] = useState(null)
   const [reactionMenuId, setReactionMenuId] = useState(null)
   const [showThemeSelector, setShowThemeSelector] = useState(false)
+  const [previewFile, setPreviewFile] = useState(null)
   const [chatTheme, setChatTheme] = useState(() => localStorage.getItem('samvad_chat_theme') || 'default')
   const [customWallpaperUrl, setCustomWallpaperUrl] = useState(() => localStorage.getItem('samvad_custom_wallpaper') || '')
   const [longPressTimer, setLongPressTimer] = useState(null)
@@ -210,10 +211,13 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
               e.stopPropagation();
               const src = msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`;
               const fileName = msg.content || '';
-              const isDocument = /\\.(pdf|doc|docx|ppt|pptx|xls|xlsx|txt|csv)$/i.test(fileName);
+              const isPdf = /\\.(pdf)$/i.test(fileName);
+              const isOffice = /\\.(doc|docx|ppt|pptx|xls|xlsx|csv)$/i.test(fileName);
               
-              if (isDocument) {
-                window.open(`https://docs.google.com/viewer?url=${encodeURIComponent(src)}`, '_blank');
+              if (isPdf) {
+                setPreviewFile({ url: `https://docs.google.com/gview?url=${encodeURIComponent(src)}&embedded=true`, name: fileName });
+              } else if (isOffice) {
+                setPreviewFile({ url: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(src)}`, name: fileName });
               } else {
                 window.open(src, '_blank');
               }
@@ -591,6 +595,26 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
               ))}
             </div>
             <button className="primary-btn" onClick={() => setShowThemeSelector(false)}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {/* Document Preview Modal */}
+      {previewFile && (
+        <div className="context-menu-overlay" style={{ zIndex: 9999, display: 'flex', flexDirection: 'column' }} onClick={() => setPreviewFile(null)}>
+          <div className="preview-header" style={{ width: '100%', padding: '15px 20px', background: '#1c1c24', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <MdInsertDriveFile size={24} color="#a78bfa" />
+              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '250px' }}>{previewFile.name}</h3>
+            </div>
+            <MdClose size={28} color="#fff" style={{ cursor: 'pointer' }} onClick={() => setPreviewFile(null)} />
+          </div>
+          <div className="preview-body" style={{ flex: 1, width: '100%', background: '#fff' }} onClick={e => e.stopPropagation()}>
+            <iframe 
+              src={previewFile.url} 
+              style={{ width: '100%', height: '100%', border: 'none' }}
+              title="Document Preview"
+            />
           </div>
         </div>
       )}

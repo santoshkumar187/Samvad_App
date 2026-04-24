@@ -335,7 +335,19 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
           const firstPinned = [...messages].reverse().find(m => m.is_pinned);
           if (firstPinned) {
             const el = document.getElementById(`msg-${firstPinned.id}`);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              const bubble = el.querySelector('.message-bubble');
+              if (bubble) {
+                bubble.classList.remove('highlight-pulse'); // reset if already running
+                // Trigger reflow
+                void bubble.offsetWidth;
+                bubble.classList.add('highlight-pulse');
+                setTimeout(() => {
+                  if (bubble) bubble.classList.remove('highlight-pulse');
+                }, 2000);
+              }
+            }
           }
         }}>
           <MdPushPin size={16} />
@@ -437,7 +449,7 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
                     ? 'Now' 
                     : new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   {isSender && (
-                    msg.status === 'read' ? <MdDoneAll size={15} color="#a78bfa" /> :
+                    msg.status === 'read' ? <MdDoneAll size={15} color="#53bdeb" /> :
                     msg.status === 'delivered' ? <MdDoneAll size={15} color="rgba(255,255,255,0.6)" /> :
                     <MdCheck size={15} color="rgba(255,255,255,0.6)" />
                   )}

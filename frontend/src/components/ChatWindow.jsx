@@ -214,13 +214,11 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
               const fileName = msg.content || '';
               const combinedStr = `${fileName} ${src}`.toLowerCase();
               const isPdf = combinedStr.includes('.pdf');
-              const isOffice = combinedStr.match(/\\.(doc|docx|ppt|pptx|xls|xlsx)$/);
-              const isText = combinedStr.match(/\\.(txt|csv|json|md)$/);
+              const isOffice = combinedStr.match(/\\.(doc|docx|ppt|pptx|xls|xlsx)/);
+              const isText = combinedStr.match(/\\.(txt|csv|json|md)/);
               
               if (isPdf) {
                 setPreviewFile({ url: `https://docs.google.com/viewer?url=${encodeURIComponent(src)}&embedded=true`, name: fileName, type: 'iframe' });
-              } else if (isOffice) {
-                setPreviewFile({ url: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(src)}`, name: fileName, type: 'iframe' });
               } else if (isText) {
                 // Fetch text content directly to preview it
                 setPreviewFile({ url: src, name: fileName, type: 'text' });
@@ -228,8 +226,10 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
                 axios.get(src)
                   .then(res => setPreviewTextContent(typeof res.data === 'object' ? JSON.stringify(res.data, null, 2) : String(res.data)))
                   .catch(err => setPreviewTextContent('Failed to load text content.'));
+              } else if (isOffice) {
+                window.open(`https://docs.google.com/viewer?url=${encodeURIComponent(src)}`, '_blank');
               } else {
-                setPreviewFile({ url: src, name: fileName, type: 'unknown' });
+                window.open(src, '_blank');
               }
             }}
           >
@@ -636,18 +636,6 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
                <pre style={{ padding: '20px', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#000', fontSize: '14px', fontFamily: 'monospace' }}>
                  {previewTextContent}
                </pre>
-            ) : previewFile.type === 'unknown' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '20px', color: '#333' }}>
-                <MdInsertDriveFile size={64} color="#9ba1a6" style={{ marginBottom: '16px' }} />
-                <h4 style={{ marginBottom: '8px', fontSize: '1.2rem' }}>Preview not available</h4>
-                <p style={{ marginBottom: '24px', color: '#666', textAlign: 'center' }}>This file type cannot be previewed within the app.</p>
-                <button 
-                  onClick={() => window.open(previewFile.url, '_blank')}
-                  style={{ padding: '12px 24px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-                >
-                  Download File
-                </button>
-              </div>
             ) : (
               <iframe 
                 src={previewFile.url} 

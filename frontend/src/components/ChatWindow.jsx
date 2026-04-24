@@ -13,6 +13,7 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
   const [reactionMenuId, setReactionMenuId] = useState(null)
   const [showThemeSelector, setShowThemeSelector] = useState(false)
   const [previewFile, setPreviewFile] = useState(null)
+  const [previewTextContent, setPreviewTextContent] = useState(null)
   const [chatTheme, setChatTheme] = useState(() => localStorage.getItem('samvad_chat_theme') || 'default')
   const [customWallpaperUrl, setCustomWallpaperUrl] = useState(() => localStorage.getItem('samvad_custom_wallpaper') || '')
   const [longPressTimer, setLongPressTimer] = useState(null)
@@ -212,12 +213,20 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
               const src = msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`;
               const fileName = msg.content || '';
               const isPdf = /\\.(pdf)$/i.test(fileName);
-              const isOffice = /\\.(doc|docx|ppt|pptx|xls|xlsx|csv)$/i.test(fileName);
+              const isOffice = /\\.(doc|docx|ppt|pptx|xls|xlsx)$/i.test(fileName);
+              const isText = /\\.(txt|csv|json|md)$/i.test(fileName);
               
               if (isPdf) {
-                setPreviewFile({ url: `https://docs.google.com/gview?url=${encodeURIComponent(src)}&embedded=true`, name: fileName });
+                setPreviewFile({ url: `https://docs.google.com/viewer?url=${encodeURIComponent(src)}&embedded=true`, name: fileName, type: 'iframe' });
               } else if (isOffice) {
-                setPreviewFile({ url: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(src)}`, name: fileName });
+                setPreviewFile({ url: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(src)}`, name: fileName, type: 'iframe' });
+              } else if (isText) {
+                // Fetch text content directly to preview it
+                setPreviewFile({ url: src, name: fileName, type: 'text' });
+                setPreviewTextContent('Loading...');
+                axios.get(src)
+                  .then(res => setPreviewTextContent(typeof res.data === 'object' ? JSON.stringify(res.data, null, 2) : String(res.data)))
+                  .catch(err => setPreviewTextContent('Failed to load text content.'));
               } else {
                 window.open(src, '_blank');
               }
@@ -613,20 +622,26 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
 
       {/* Document Preview Modal */}
       {previewFile && (
-        <div className="context-menu-overlay" style={{ zIndex: 9999, display: 'flex', flexDirection: 'column' }} onClick={() => setPreviewFile(null)}>
+        <div className="context-menu-overlay" style={{ zIndex: 9999, display: 'flex', flexDirection: 'column' }} onClick={() => { setPreviewFile(null); setPreviewTextContent(null); }}>
           <div className="preview-header" style={{ width: '100%', padding: '15px 20px', background: '#1c1c24', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <MdInsertDriveFile size={24} color="#a78bfa" />
               <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '250px' }}>{previewFile.name}</h3>
             </div>
-            <MdClose size={28} color="#fff" style={{ cursor: 'pointer' }} onClick={() => setPreviewFile(null)} />
+            <MdClose size={28} color="#fff" style={{ cursor: 'pointer' }} onClick={() => { setPreviewFile(null); setPreviewTextContent(null); }} />
           </div>
-          <div className="preview-body" style={{ flex: 1, width: '100%', background: '#fff' }} onClick={e => e.stopPropagation()}>
-            <iframe 
-              src={previewFile.url} 
-              style={{ width: '100%', height: '100%', border: 'none' }}
-              title="Document Preview"
-            />
+          <div className="preview-body" style={{ flex: 1, width: '100%', background: '#fff', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            {previewFile.type === 'text' ? (
+               <pre style={{ padding: '20px', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#000', fontSize: '14px', fontFamily: 'monospace' }}>
+                 {previewTextContent}
+               </pre>
+            ) : (
+              <iframe 
+                src={previewFile.url} 
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title="Document Preview"
+              />
+            )}
           </div>
         </div>
       )}

@@ -402,31 +402,47 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
           <MdMoreVert onClick={() => setShowMenu(!showMenu)} style={{ cursor: 'pointer' }} />
           
           {showMenu && (
-            <div className="header-dropdown">
-              <div className="dropdown-item" onClick={() => { setShowThemeSelector(true); setShowMenu(false); }}>
-                <MdPalette /> Chat Theme
-              </div>
-              <div className="dropdown-item" onClick={handleSummarize}>
-                <MdInfoOutline /> AI Summarize Chat
-              </div>
-              <div className="dropdown-item" onClick={async (e) => {
-                e.stopPropagation();
-                console.log('Bulk delete requested');
-                if (window.confirm('Clear all messages in this chat?')) {
-                  try {
-                    await axios.delete(`${serverUrl}/api/messages/${currentUser.id}/${selectedUser.id}`)
-                    console.log('Bulk delete success');
-                    onClearChat()
-                    setShowMenu(false)
-                  } catch (err) {
-                    console.error('Bulk delete failed', err);
-                    alert('Failed to clear chat')
+            <>
+              <div 
+                className="dropdown-overlay" 
+                onClick={() => setShowMenu(false)} 
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 998,
+                  background: 'transparent',
+                  cursor: 'default'
+                }} 
+              />
+              <div className="header-dropdown" style={{ zIndex: 999 }}>
+                <div className="dropdown-item" onClick={() => { setShowThemeSelector(true); setShowMenu(false); }}>
+                  <MdPalette /> Chat Theme
+                </div>
+                <div className="dropdown-item" onClick={handleSummarize}>
+                  <MdInfoOutline /> AI Summarize Chat
+                </div>
+                <div className="dropdown-item" onClick={async (e) => {
+                  e.stopPropagation();
+                  console.log('Bulk delete requested');
+                  if (window.confirm('Clear all messages in this chat?')) {
+                    try {
+                      await axios.delete(`${serverUrl}/api/messages/${currentUser.id}/${selectedUser.id}`)
+                      console.log('Bulk delete success');
+                      onClearChat()
+                      setShowMenu(false)
+                    } catch (err) {
+                      console.error('Bulk delete failed', err);
+                      alert('Failed to clear chat')
+                    }
                   }
-                }
-              }}>
-                <MdDeleteOutline /> Clear Chat
+                }}>
+                  <MdDeleteOutline /> Clear Chat
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>

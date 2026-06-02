@@ -130,17 +130,17 @@ async function initDB() {
           "ai@samvad.app", 
           hashedPassword, 
           "ai#9999", 
-          "/uploads/ai_avatar.png", 
+          "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT4cTHq4A3nxYnx117GVvP9vsp7sogn7RdR7w&s", 
           "Your personal AI companion. Ready to answer questions, translate, or chat!", 
           true
         ]
       );
       console.log("AI Assistant user seeded successfully.");
     } else {
-      // Ensure the existing entry uses the beautiful WALL-E avatar!
+      // Ensure the existing entry uses the beautiful custom avatar!
       await pool.query(
         "UPDATE users SET profile_pic = ? WHERE samvad_id = ?",
-        ["/uploads/ai_avatar.png", "ai#9999"]
+        ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT4cTHq4A3nxYnx117GVvP9vsp7sogn7RdR7w&s", "ai#9999"]
       );
       console.log("AI Assistant profile picture updated successfully in the database.");
     }

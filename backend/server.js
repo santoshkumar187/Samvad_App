@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v2: cloudinary } = require('cloudinary');
 const { initDB, getPool } = require('./db');
+const { getAssistantReply, getSmartSuggestions, translateText, summarizeConversation } = require('./ai');
 
 // Configure Cloudinary
 cloudinary.config({
@@ -39,6 +40,18 @@ const io = new Server(server, {
     origin: '*',
     methods: ['GET', 'POST']
   }
+});
+
+// Enforce JWT verification on connection
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error('Authentication error: Token missing'));
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) return next(new Error('Authentication error: Invalid token'));
+    socket.userId = decoded.id;
+    socket.username = decoded.username;
+    next();
+  });
 });
 
 app.use(cors());
@@ -231,9 +244,85 @@ app.get('/api/friends', authenticateToken, async (req, res) => {
       WHERE u.id != ?
       GROUP BY u.id
     `, [req.user.id, req.user.id, req.user.id]);
+    
+    // Auto-append Samvad AI Assistant
+    const [aiRows] = await pool.query('SELECT id, username, samvad_id, online, profile_pic, about, last_seen FROM users WHERE samvad_id = ?', ['ai#9999']);
+    if (aiRows.length > 0) {
+      aiRows[0].online = true; // AI is always online
+      rows.unshift(aiRows[0]); // Put AI at the top
+    }
+    
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// AI smart replies suggestions
+app.get('/api/ai/suggestions', authenticateToken, async (req, res) => {
+  const { receiverId } = req.query;
+  if (!receiverId) return res.status(400).json({ error: 'receiverId required' });
+  try {
+    const pool = getPool();
+    const [rows] = await pool.query(`
+      SELECT sender_id, receiver_id, content, timestamp 
+      FROM messages 
+      WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+      ORDER BY timestamp DESC LIMIT 5
+    `, [req.user.id, receiverId, receiverId, req.user.id]);
+    
+    const history = rows.reverse().map(m => ({
+      sender: Number(m.sender_id) === Number(req.user.id) ? 'You' : 'Friend',
+      content: m.content
+    }));
+    
+    const suggestions = await getSmartSuggestions(history);
+    res.json(suggestions);
+  } catch (err) {
+    console.error('Suggestions error:', err);
+    res.status(500).json({ error: 'Failed to fetch suggestions' });
+  }
+});
+
+// AI Translation endpoint
+app.post('/api/ai/translate', authenticateToken, async (req, res) => {
+  const { text, targetLang } = req.body;
+  if (!text || !targetLang) return res.status(400).json({ error: 'Text and targetLang required' });
+  try {
+    const translation = await translateText(text, targetLang);
+    res.json({ translation });
+  } catch (err) {
+    console.error('Translation error:', err);
+    res.status(500).json({ error: 'Failed to translate' });
+  }
+});
+
+// AI Summarize Chat endpoint
+app.get('/api/ai/summarize', authenticateToken, async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  try {
+    const pool = getPool();
+    const [rows] = await pool.query(`
+      SELECT sender_id, content, timestamp 
+      FROM messages 
+      WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+      ORDER BY timestamp ASC LIMIT 30
+    `, [req.user.id, userId, userId, req.user.id]);
+    
+    const [userRow] = await pool.query('SELECT username FROM users WHERE id = ?', [userId]);
+    const friendName = userRow[0]?.username || 'Friend';
+    
+    const history = rows.map(m => ({
+      sender: Number(m.sender_id) === Number(req.user.id) ? 'You' : friendName,
+      content: m.content
+    }));
+    
+    const summary = await summarizeConversation(history);
+    res.json({ summary });
+  } catch (err) {
+    console.error('Summarization error:', err);
+    res.status(500).json({ error: 'Failed to summarize chat' });
   }
 });
 
@@ -288,10 +377,13 @@ app.delete('/api/messages/:user1/:user2', async (req, res) => {
       [user1, user2, user2, user1]
     );
 
+    const uploadsDir = path.resolve(__dirname, 'uploads');
     for (const msg of rows) {
-      if (msg.file_url) {
-        const filePath = path.join(__dirname, msg.file_url);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (msg.file_url && !msg.file_url.startsWith('http')) {
+        const safeFilePath = path.resolve(uploadsDir, path.basename(msg.file_url));
+        if (safeFilePath.startsWith(uploadsDir) && fs.existsSync(safeFilePath)) {
+          fs.unlinkSync(safeFilePath);
+        }
       }
     }
 
@@ -322,9 +414,12 @@ app.post('/api/messages/:id/delete', async (req, res) => {
       // Hard delete (only if requester is sender)
       if (msg.sender_id !== userId) return res.status(403).json({ error: 'Only sender can delete for everyone' });
       
-      if (msg.file_url) {
-        const filePath = path.join(__dirname, msg.file_url);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (msg.file_url && !msg.file_url.startsWith('http')) {
+        const uploadsDir = path.resolve(__dirname, 'uploads');
+        const safeFilePath = path.resolve(uploadsDir, path.basename(msg.file_url));
+        if (safeFilePath.startsWith(uploadsDir) && fs.existsSync(safeFilePath)) {
+          fs.unlinkSync(safeFilePath);
+        }
       }
       await pool.query('DELETE FROM messages WHERE id = ?', [id]);
       io.emit('message_deleted', { messageId: parseInt(id), sender_id: msg.sender_id, receiver_id: msg.receiver_id });
@@ -351,10 +446,13 @@ app.delete('/api/users/:id', async (req, res) => {
     
     // 1. Fetch all messages involving this user to delete physical files
     const [rows] = await pool.query('SELECT file_url FROM messages WHERE sender_id = ? OR receiver_id = ?', [id, id]);
+    const uploadsDir = path.resolve(__dirname, 'uploads');
     for (const msg of rows) {
-      if (msg.file_url) {
-        const filePath = path.join(__dirname, msg.file_url);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (msg.file_url && !msg.file_url.startsWith('http')) {
+        const safeFilePath = path.resolve(uploadsDir, path.basename(msg.file_url));
+        if (safeFilePath.startsWith(uploadsDir) && fs.existsSync(safeFilePath)) {
+          fs.unlinkSync(safeFilePath);
+        }
       }
     }
 
@@ -380,8 +478,12 @@ io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
   socket.on('join', async (userId) => {
+    // Secure verification check
+    if (Number(userId) !== Number(socket.userId)) {
+      console.error(`Blocked unauthorized join: socket user ${socket.userId} attempted to join as user ${userId}`);
+      return;
+    }
     connectedUsers.set(userId, socket.id);
-    socket.userId = userId;
 
     // Update DB
     try {
@@ -410,6 +512,8 @@ io.on('connection', (socket) => {
     // data: { sender_id, receiver_id, content, type, file_url, correlationId, reply_to, is_forwarded }
     try {
       const pool = getPool();
+      
+      // Save sender's message in DB
       const [result] = await pool.query(
         'INSERT INTO messages (sender_id, receiver_id, content, type, file_url, reply_to, is_forwarded) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [data.sender_id, data.receiver_id, data.content, data.type || 'text', data.file_url || null, data.reply_to || null, data.is_forwarded || false]
@@ -434,22 +538,74 @@ io.on('connection', (socket) => {
         timestamp: new Date()
       };
 
-      // Send to receiver if online
+      // Send back to sender with correlationId for UI sync immediately
+      socket.emit('message_sent', {
+        ...newMsg,
+        correlationId: data.correlationId
+      });
+
+      // Detect if receiver is the persistent AI chatbot assistant
+      const [aiUser] = await pool.query('SELECT id FROM users WHERE samvad_id = ?', ['ai#9999']);
+      const aiId = aiUser[0]?.id;
+
+      if (aiId && Number(data.receiver_id) === Number(aiId)) {
+        // Trigger simulated typing indicator from the AI assistant
+        socket.emit('user_typing', { userId: aiId });
+
+        // Retrieve last 5 messages for context
+        const [historyRows] = await pool.query(`
+          SELECT sender_id, content FROM messages 
+          WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+          ORDER BY timestamp DESC LIMIT 6
+        `, [data.sender_id, aiId, aiId, data.sender_id]);
+
+        const history = historyRows.reverse().map(m => ({
+          is_ai: Number(m.sender_id) === Number(aiId),
+          content: m.content
+        }));
+
+        // Generate response with natural 1-1.5s delay
+        setTimeout(async () => {
+          try {
+            const replyText = await getAssistantReply(history, data.content);
+            
+            // Insert AI message into database
+            const [aiResult] = await pool.query(
+              'INSERT INTO messages (sender_id, receiver_id, content, type, status) VALUES (?, ?, ?, ?, ?)',
+              [aiId, data.sender_id, replyText, 'text', 'read']
+            );
+            
+            const aiMsg = {
+              id: aiResult.insertId,
+              sender_id: aiId,
+              receiver_id: data.sender_id,
+              content: replyText,
+              type: 'text',
+              status: 'read',
+              timestamp: new Date()
+            };
+            
+            // Stop typing and push bot message to sender
+            socket.emit('user_stopped_typing', { userId: aiId });
+            socket.emit('receive_message', aiMsg);
+          } catch (aiErr) {
+            console.error('AI chatbot generation error:', aiErr);
+            socket.emit('user_stopped_typing', { userId: aiId });
+          }
+        }, 1200);
+
+        return;
+      }
+
+      // Standard message delivery for real users
       const receiverSocketId = connectedUsers.get(data.receiver_id);
       if (receiverSocketId) {
-        // Assume delivered if online
         await pool.query('UPDATE messages SET status = ? WHERE id = ?', ['delivered', result.insertId]);
         newMsg.status = 'delivered';
         io.to(receiverSocketId).emit('receive_message', newMsg);
       } else {
         newMsg.status = 'sent';
       }
-      
-      // Send back to sender with correlationId for UI sync
-      socket.emit('message_sent', {
-        ...newMsg,
-        correlationId: data.correlationId
-      });
 
     } catch (err) {
       console.error('Error saving message:', err);

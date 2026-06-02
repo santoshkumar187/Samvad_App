@@ -4,7 +4,7 @@ import {
   MdChat, MdVideocam, MdCall, MdMoreVert, MdArrowBack, MdDoneAll, MdCheck,
   MdDeleteOutline, MdReply, MdForward, MdContentCopy, MdCheckCircleOutline, 
   MdInfoOutline, MdPushPin, MdFullscreen, MdFullscreenExit, MdInsertDriveFile,
-  MdPalette, MdPhotoLibrary, MdClose
+  MdPalette, MdPhotoLibrary, MdClose, MdSearch, MdTranslate
 } from 'react-icons/md'
 
 export default function ChatWindow({ currentUser, selectedUser, messages, onSendMessage, serverUrl, onBack, onClearChat, onDeleteMessage, onReactMessage, onPinMessage, onReplyMessage, onForwardMessage, isSidebarHidden, onToggleSidebar, isTyping, onViewImage, onStartCall }) {
@@ -24,6 +24,92 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [isReturning, setIsReturning] = useState(false)
   const scrollRef = useRef(null)
+
+  // AI & Enrichment States
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  
+  const [messageTranslations, setMessageTranslations] = useState({});
+  const [translatingMessageId, setTranslatingMessageId] = useState(null);
+  
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [showTranslateLanguageSelect, setShowTranslateLanguageSelect] = useState(false);
+
+  // Fetch AI Smart Reply suggestions
+  useEffect(() => {
+    if (!selectedUser || !currentUser) {
+      setAiSuggestions([]);
+      return;
+    }
+    const fetchSuggestions = async () => {
+      setLoadingSuggestions(true);
+      try {
+        const res = await axios.get(`${serverUrl}/api/ai/suggestions?receiverId=${selectedUser.id}`);
+        if (Array.isArray(res.data)) {
+          setAiSuggestions(res.data);
+        } else {
+          setAiSuggestions([]);
+        }
+      } catch (err) {
+        console.error('Failed to load AI suggestions:', err);
+        setAiSuggestions([]);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    };
+    // Fetch suggestions when selecting a user or when messages count increases
+    const timer = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(timer);
+  }, [selectedUser, messages.length]);
+
+  const handleTranslate = async (targetLang) => {
+    if (!activeMessageMenu) return;
+    const msgId = activeMessageMenu.id;
+    const originalText = activeMessageMenu.content;
+    
+    setTranslatingMessageId(msgId);
+    setActiveMessageMenu(null);
+    setShowTranslateLanguageSelect(false);
+    
+    try {
+      const res = await axios.post(`${serverUrl}/api/ai/translate`, {
+        text: originalText,
+        targetLang
+      });
+      setMessageTranslations(prev => ({
+        ...prev,
+        [msgId]: {
+          text: res.data.translation,
+          lang: targetLang
+        }
+      }));
+    } catch (err) {
+      alert('Failed to translate message.');
+    } finally {
+      setTranslatingMessageId(null);
+    }
+  };
+
+  const handleSummarize = async () => {
+    setShowMenu(false);
+    setLoadingSummary(true);
+    setShowSummaryModal(true);
+    setSummaryText('Analyzing conversation and generating bulleted AI highlights...');
+    
+    try {
+      const res = await axios.get(`${serverUrl}/api/ai/summarize?userId=${selectedUser.id}`);
+      setSummaryText(res.data?.summary || 'No summary returned by AI.');
+    } catch (err) {
+      setSummaryText('Failed to generate AI conversation summary. Please try again.');
+    } finally {
+      setLoadingSummary(false);
+    }
+  };
 
   const handleLongPress = (msg) => {
     setActiveMessageMenu(msg)
@@ -301,6 +387,9 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
           <span style={{ textTransform: 'lowercase' }}>{selectedUser.online ? 'Online' : formatLastSeen(selectedUser.last_seen)}</span>
         </div>
         <div className="chat-header-actions" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div className="header-action-btn" onClick={() => setShowSearch(!showSearch)} title="Search Messages" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <MdSearch size={22} />
+          </div>
           <div className="header-action-btn" onClick={() => onStartCall('audio')} title="Audio Call" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
             <MdCall size={22} />
           </div>
@@ -316,6 +405,9 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
             <div className="header-dropdown">
               <div className="dropdown-item" onClick={() => { setShowThemeSelector(true); setShowMenu(false); }}>
                 <MdPalette /> Chat Theme
+              </div>
+              <div className="dropdown-item" onClick={handleSummarize}>
+                <MdInfoOutline /> AI Summarize Chat
               </div>
               <div className="dropdown-item" onClick={async (e) => {
                 e.stopPropagation();
@@ -338,6 +430,24 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
           )}
         </div>
       </div>
+
+      {/* Real-time Search Input Bar */}
+      {showSearch && (
+        <div className="chat-search-bar-sliding">
+          <MdSearch size={20} color="#8e8e93" />
+          <input 
+            type="text" 
+            placeholder="Search in this conversation..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            autoFocus
+          />
+          {searchQuery && (
+            <span className="clear-search-btn" onClick={() => setSearchQuery('')}>&times;</span>
+          )}
+          <span className="close-search-btn" onClick={() => { setShowSearch(false); setSearchQuery(''); }}>Cancel</span>
+        </div>
+      )}
 
       {/* Pinned Messages Header */}
       {messages.some(m => m.is_pinned) && (
@@ -379,9 +489,14 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
         <div className="date-separator">
           {formatHeaderDate()}
         </div>
-        {messages.map(msg => {
-          const isSender = msg.sender_id === currentUser.id
-          const emojiOnly = msg.type === 'text' && isOnlyEmojis(msg.content);
+        {messages
+          .filter(msg => {
+            if (!searchQuery.trim()) return true;
+            return msg.content && msg.content.toLowerCase().includes(searchQuery.toLowerCase());
+          })
+          .map(msg => {
+            const isSender = msg.sender_id === currentUser.id
+            const emojiOnly = msg.type === 'text' && isOnlyEmojis(msg.content);
           
           return (
             <div 
@@ -453,6 +568,20 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
                   </div>
                 )}
                 {renderMessageContent(msg)}
+
+                {translatingMessageId === msg.id && (
+                  <div className="ai-translation-loader">
+                    <span className="translating-spinner"></span> Translating...
+                  </div>
+                )}
+
+                {messageTranslations[msg.id] && (
+                  <div className="ai-translated-container">
+                    <div className="translation-divider"></div>
+                    <span className="translation-badge"><MdTranslate size={11} /> Translated to {messageTranslations[msg.id].lang}</span>
+                    <p className="translation-text">{messageTranslations[msg.id].text}</p>
+                  </div>
+                )}
                 <div className="bubble-meta">
                   {!!msg.is_forwarded && <span className="forwarded-label">Forwarded</span>}
                   {(Date.now() - new Date(msg.timestamp).getTime() < 60000) 
@@ -488,6 +617,27 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
             </div>
           </div>
         )}
+
+        {/* AI suggested smart replies pills */}
+        {Array.isArray(aiSuggestions) && aiSuggestions.length > 0 && !isTyping && (
+          <div className="ai-suggestions-container-wrapper">
+            <span className="ai-suggestions-title"><MdChat size={12} /> Suggested Replies</span>
+            <div className="ai-suggestions-pills-row">
+              {aiSuggestions.map((suggestion, index) => (
+                <div 
+                  key={index} 
+                  className="ai-suggestion-pill"
+                  onClick={() => {
+                    onSendMessage({ content: suggestion, type: 'text' });
+                    setAiSuggestions(prev => Array.isArray(prev) ? prev.filter(s => s !== suggestion) : []);
+                  }}
+                >
+                  {suggestion}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {activeMessageMenu && (
@@ -510,6 +660,11 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
               <div className="context-item" onClick={() => { onReplyMessage(activeMessageMenu); setActiveMessageMenu(null); }}>
                 <MdReply /> Reply
               </div>
+              {activeMessageMenu.type === 'text' && (
+                <div className="context-item" onClick={() => setShowTranslateLanguageSelect(true)}>
+                  <MdTranslate /> AI Translate
+                </div>
+              )}
               <div className="context-item" onClick={() => { onForwardMessage(activeMessageMenu); setActiveMessageMenu(null); }}>
                 <MdForward /> Forward
               </div>
@@ -643,6 +798,66 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
                 title="Document Preview"
               />
             )}
+          </div>
+        </div>
+      )}
+      {/* Language Selection overlay */}
+      {showTranslateLanguageSelect && (
+        <div className="context-menu-overlay" onClick={() => setShowTranslateLanguageSelect(false)}>
+          <div className="context-menu" onClick={e => e.stopPropagation()}>
+            <div className="context-list">
+              <div style={{ padding: '10px 15px', fontSize: '0.8rem', color: 'var(--signal-text-muted)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                Select Target Language
+              </div>
+              {['English', 'Spanish', 'Hindi', 'French', 'Japanese'].map(lang => (
+                <div key={lang} className="context-item" onClick={() => handleTranslate(lang)}>
+                  {lang}
+                </div>
+              ))}
+              <div className="context-item delete" onClick={() => setShowTranslateLanguageSelect(false)}>
+                Cancel
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Summary Modal */}
+      {showSummaryModal && (
+        <div className="chat-summary-overlay" onClick={() => setShowSummaryModal(false)}>
+          <div className="summary-modal-card" onClick={e => e.stopPropagation()}>
+            <div className="summary-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MdInfoOutline size={22} color="var(--brand-violet)" />
+                <h3>Samvad AI Chat Summary</h3>
+              </div>
+              <span className="close-summary-btn" onClick={() => setShowSummaryModal(false)}>&times;</span>
+            </div>
+            
+            <div className="summary-modal-body">
+              {loadingSummary ? (
+                <div className="summary-loading-state">
+                  <div className="summary-pulse-ring"></div>
+                  <p>Samvad AI is reading chat logs...</p>
+                </div>
+              ) : (
+                <div className="summary-markdown-rendered">
+                  {(summaryText || '').split('\n').map((line, idx) => {
+                    if (line.startsWith('###')) {
+                      return <h4 key={idx} style={{ marginTop: '15px', color: 'var(--brand-violet)' }}>{line.replace('###', '').trim()}</h4>;
+                    }
+                    if (line.startsWith('####')) {
+                      return <h5 key={idx} style={{ marginTop: '10px', color: '#fff' }}>{line.replace('####', '').trim()}</h5>;
+                    }
+                    if (line.startsWith('-')) {
+                      return <li key={idx} style={{ marginLeft: '15px', marginBottom: '5px', fontSize: '0.9rem', color: 'var(--signal-text-muted)' }}>{line.replace('-', '').trim()}</li>;
+                    }
+                    return <p key={idx} style={{ marginBottom: '10px', fontSize: '0.95rem', lineHeight: '1.4' }}>{line}</p>;
+                  })}
+                </div>
+              )}
+            </div>
+            <button className="primary-btn" style={{ marginTop: '20px' }} onClick={() => setShowSummaryModal(false)}>Close Summary</button>
           </div>
         </div>
       )}

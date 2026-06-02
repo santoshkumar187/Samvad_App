@@ -173,23 +173,30 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
               </div>
               <div className="user-info">
                 <div className="user-info-top">
-                  <h4>{user.username}</h4>
-                  <span className="time-snippet">{user.online ? 'Online' : new Date(user.last_seen).toLocaleDateString()}</span>
+                  <h4 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {user.username}
+                    {user.samvad_id === 'ai#9999' && <span className="ai-bot-pill-badge">AI BOT</span>}
+                  </h4>
+                  <span className="time-snippet">
+                    {user.samvad_id === 'ai#9999' ? 'Active 24/7' : (user.online ? 'Online' : new Date(user.last_seen).toLocaleDateString())}
+                  </span>
                 </div>
                 <div className="user-info-bottom">
                   <p>{user.about || 'Available'}</p>
                 </div>
               </div>
-              <div 
-                className="user-delete-action" 
-                title="Delete this account"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteSpecificUser(user.id, user.username);
-                }}
-              >
-                <MdDeleteSweep size={20} />
-              </div>
+              {user.samvad_id !== 'ai#9999' && (
+                <div 
+                  className="user-delete-action" 
+                  title="Delete this account"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteSpecificUser(user.id, user.username);
+                  }}
+                >
+                  <MdDeleteSweep size={20} />
+                </div>
+              )}
             </div>
           ))
         )}

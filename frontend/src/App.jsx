@@ -8,6 +8,7 @@ import CallModal from './components/CallModal'
 import CallWindow from './components/CallWindow'
 import { MdVisibility, MdVisibilityOff, MdChatBubble, MdPerson, MdEmail, MdLock, MdCall } from 'react-icons/md'
 import { FaGoogle, FaApple } from 'react-icons/fa'
+import { playNotificationSound, playSentSound, startIncomingCallRing, startDialingSound, stopCallSound } from './utils/audio'
 
 const SERVER_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
   ? `http://${window.location.hostname}:3000` 
@@ -33,6 +34,29 @@ function App() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoginMode, setIsLoginMode] = useState(true)
   const [socketInstance, setSocketInstance] = useState(null)
+  const [toasts, setToasts] = useState([])
+
+  // Request Notification Permissions on Startup
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const showInAppToast = (msg, sender) => {
+    const id = Date.now();
+    const newToast = {
+      id,
+      message: msg.content || 'Sent a media file',
+      senderName: sender.username,
+      senderId: sender.id,
+      senderAvatar: sender.profile_pic
+    };
+    setToasts(prev => [...prev, newToast]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4500);
+  };
   
   const [selectedUser, setSelectedUser] = useState(null)
   const [users, setUsers] = useState([])
@@ -60,8 +84,9 @@ function App() {
         try {
           const res = await axios.get(`${SERVER_URL}/api/auth/me`);
           setCurrentUser(res.data);
-          
-          const newSocket = io(SERVER_URL);
+          const newSocket = io(SERVER_URL, {
+            auth: { token: localStorage.getItem('samvad_token') }
+          });
           setSocketInstance(newSocket);
           newSocket.emit('join', res.data.id);
         } catch (err) {
@@ -91,7 +116,9 @@ function App() {
       setCurrentUser(user)
       localStorage.setItem('samvad_token', token);
       
-      const newSocket = io(SERVER_URL)
+      const newSocket = io(SERVER_URL, {
+        auth: { token: localStorage.getItem('samvad_token') }
+      })
       setSocketInstance(newSocket)
       newSocket.emit('join', user.id)
     } catch (err) {
@@ -121,7 +148,41 @@ function App() {
     })
 
     socketInstance.on('receive_message', (msg) => {
-      setMessages(prev => [...prev, msg])
+      setMessages(prev => [...prev, msg]);
+      
+      // Play native audio chime
+      playNotificationSound();
+
+      // Trigger standard/in-app notification check
+      const isAppFocused = document.hasFocus();
+      const isChattingWithSender = selectedUser && Number(selectedUser.id) === Number(msg.sender_id);
+
+      if (!isAppFocused || !isChattingWithSender) {
+        const sender = usersRef.current.find(u => Number(u.id) === Number(msg.sender_id));
+        const senderName = sender ? sender.username : 'Someone';
+        
+        // Native browser desktop notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          const iconUrl = sender?.profile_pic 
+            ? (sender.profile_pic.startsWith('http') ? sender.profile_pic : `${SERVER_URL}${sender.profile_pic}`)
+            : 'https://api.dicebear.com/7.x/bottts/svg?seed=Samvad';
+            
+          const n = new Notification(`New message from ${senderName}`, {
+            body: msg.content || 'Sent a media file',
+            icon: iconUrl
+          });
+          
+          n.onclick = () => {
+            window.focus();
+            if (sender) setSelectedUser(sender);
+          };
+        }
+
+        // In-App Toast banner
+        if (isAppFocused && sender) {
+          showInAppToast(msg, sender);
+        }
+      }
     })
 
     socketInstance.on('user_deleted', ({ userId }) => {
@@ -166,10 +227,9 @@ function App() {
 
     // ── Call Events ────────────────────────────────────
     socketInstance.on('incoming_call', ({ from, signal, callType }) => {
-      // Use usersRef to avoid stale closure. Also fix type: socket userId is string, DB id is number.
+      startIncomingCallRing(); // Start looped ringtone
       const callerUser = usersRef.current.find(u => Number(u.id) === Number(from));
       if (!callerUser) {
-        // Not in friends list or friends not loaded — still show call with basic info
         setIncomingCall({ from: Number(from), signal, callType, caller: { id: Number(from), username: 'Unknown' } });
         return;
       }
@@ -177,11 +237,13 @@ function App() {
     });
 
     socketInstance.on('call_rejected', () => {
+      stopCallSound(); // Stop dial/ring
       setActiveCall(null);
       alert('Call was rejected.');
     });
 
     socketInstance.on('call_ended', () => {
+      stopCallSound(); // Stop dial/ring
       setActiveCall(null);
     });
     // ──────────────────────────────────────────────────
@@ -237,6 +299,7 @@ function App() {
     }
     
     socketInstance.emit('send_message', newMsg)
+    playSentSound(); // Play Synthesized Sent Sound!
     
     const parentInfo = replyingTo ? {
       parent_content: replyingTo.content,
@@ -385,11 +448,13 @@ function App() {
       alert(`${selectedUser.username} is offline. You can only call online users.`);
       return;
     }
+    startDialingSound(); // Play dialing hums
     setActiveCall({ remoteUser: selectedUser, callType, isInitiator: true, signal: null });
   };
 
   const handleAcceptCall = () => {
     if (!incomingCall) return;
+    stopCallSound(); // Stop ringtone
     setActiveCall({
       remoteUser: incomingCall.caller,
       callType: incomingCall.callType,
@@ -401,11 +466,13 @@ function App() {
 
   const handleRejectCall = () => {
     if (!incomingCall || !socketInstance) return;
+    stopCallSound(); // Stop ringtone
     socketInstance.emit('reject_call', { to: incomingCall.from });
     setIncomingCall(null);
   };
 
   const handleEndCall = () => {
+    stopCallSound(); // Stop dial/ring
     setActiveCall(null);
   };
   // ──────────────────────────────────────────────────────────────
@@ -595,6 +662,30 @@ function App() {
           />
         </div>
       )}
+
+      {/* In-app glassmorphic notifications */}
+      <div className="in-app-toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className="in-app-toast" onClick={() => {
+            const senderUser = users.find(u => Number(u.id) === Number(t.senderId));
+            if (senderUser) setSelectedUser(senderUser);
+            setToasts(prev => prev.filter(toast => toast.id !== t.id));
+          }}>
+            <div className="toast-avatar">
+              {t.senderAvatar ? (
+                <img src={t.senderAvatar.startsWith('http') ? t.senderAvatar : `${SERVER_URL}${t.senderAvatar}`} alt="" />
+              ) : (
+                t.senderName.charAt(0).toUpperCase()
+              )}
+            </div>
+            <div className="toast-details">
+              <h4>{t.senderName}</h4>
+              <p>{t.message}</p>
+            </div>
+            <div className="toast-close" onClick={(e) => { e.stopPropagation(); setToasts(prev => prev.filter(toast => toast.id !== t.id)); }}>&times;</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

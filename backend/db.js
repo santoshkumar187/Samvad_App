@@ -118,6 +118,33 @@ async function initDB() {
       await pool.query("ALTER TABLE messages ADD COLUMN deleted_for_receiver BOOLEAN DEFAULT false");
     }
 
+    // Seed AI Assistant user
+    const [aiExists] = await pool.query("SELECT * FROM users WHERE samvad_id = 'ai#9999'");
+    if (aiExists.length === 0) {
+      console.log("Seeding AI Assistant user...");
+      const hashedPassword = 'ai_assistant_secure_inactive_password_hash';
+      await pool.query(
+        "INSERT INTO users (username, email, password, samvad_id, profile_pic, about, online) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          "Samvad AI Assistant", 
+          "ai@samvad.app", 
+          hashedPassword, 
+          "ai#9999", 
+          "/uploads/ai_avatar.png", 
+          "Your personal AI companion. Ready to answer questions, translate, or chat!", 
+          true
+        ]
+      );
+      console.log("AI Assistant user seeded successfully.");
+    } else {
+      // Ensure the existing entry uses the beautiful WALL-E avatar!
+      await pool.query(
+        "UPDATE users SET profile_pic = ? WHERE samvad_id = ?",
+        ["/uploads/ai_avatar.png", "ai#9999"]
+      );
+      console.log("AI Assistant profile picture updated successfully in the database.");
+    }
+
   } catch (error) {
     console.error("Error initializing database:", error.message);
     if (error.code === 'ENOTFOUND') {

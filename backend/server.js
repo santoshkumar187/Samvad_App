@@ -348,21 +348,35 @@ app.post('/api/friends/add', authenticateToken, async (req, res) => {
 app.get('/api/messages/:user1/:user2', async (req, res) => {
   const u1 = req.params.user1;
   const u2 = req.params.user2;
+  const beforeId = req.query.beforeId ? parseInt(req.query.beforeId) : null;
+  const limit = req.query.limit ? parseInt(req.query.limit) : 30;
 
   try {
     const pool = getPool();
-    const [rows] = await pool.query(`
+    let query = `
       SELECT m.*, p.content as parent_content, p.sender_id as parent_sender_id, u.username as parent_sender_name
       FROM messages m
       LEFT JOIN messages p ON m.reply_to = p.id
       LEFT JOIN users u ON p.sender_id = u.id
-      WHERE (m.sender_id = ? AND m.receiver_id = ? AND m.deleted_for_sender = false) 
-         OR (m.sender_id = ? AND m.receiver_id = ? AND m.deleted_for_receiver = false)
-      ORDER BY m.timestamp ASC
-    `, [u1, u2, u2, u1]);
+      WHERE ((m.sender_id = ? AND m.receiver_id = ? AND m.deleted_for_sender = false) 
+         OR (m.sender_id = ? AND m.receiver_id = ? AND m.deleted_for_receiver = false))
+    `;
+    const params = [u1, u2, u2, u1];
+
+    if (beforeId) {
+      query += ` AND m.id < ?`;
+      params.push(beforeId);
+    }
+
+    query += ` ORDER BY m.id DESC LIMIT ?`;
+    params.push(limit);
+
+    const [rows] = await pool.query(query, params);
     
-    res.json(rows);
+    // Reverse back to ascending time order
+    res.json(rows.reverse());
   } catch (error) {
+    console.error('Paginated query failed:', error);
     res.status(500).json({ error: 'Database error' });
   }
 });

@@ -67,6 +67,9 @@ function App() {
   const [isSidebarHidden, setIsSidebarHidden] = useState(false)
   const [typingUserId, setTypingUserId] = useState(null)
   const [viewingImageUrl, setViewingImageUrl] = useState(null)
+  const [hasMoreMessages, setHasMoreMessages] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const lastTypingEmitRef = useRef(0)
 
   // Call state
   const [incomingCall, setIncomingCall] = useState(null)
@@ -270,8 +273,12 @@ function App() {
     
     const fetchHistory = async () => {
       try {
-        const res = await axios.get(`${SERVER_URL}/api/messages/${currentUser.id}/${selectedUser.id}`)
+        setHasMoreMessages(true)
+        const res = await axios.get(`${SERVER_URL}/api/messages/${currentUser.id}/${selectedUser.id}?limit=30`)
         setMessages(res.data)
+        if (res.data.length < 30) {
+          setHasMoreMessages(false)
+        }
         
         if (socketInstance) {
           socketInstance.emit('mark_messages_read', { sender_id: selectedUser.id, receiver_id: currentUser.id })
@@ -282,6 +289,32 @@ function App() {
     }
     fetchHistory()
   }, [currentUser, selectedUser, socketInstance])
+
+  const handleLoadMoreMessages = async () => {
+    if (loadingMore || !hasMoreMessages || !currentUser || !selectedUser) return;
+    setLoadingMore(true);
+    const oldestId = messages[0]?.id;
+    if (!oldestId) {
+      setLoadingMore(false);
+      return;
+    }
+
+    try {
+      const res = await axios.get(
+        `${SERVER_URL}/api/messages/${currentUser.id}/${selectedUser.id}?beforeId=${oldestId}&limit=30`
+      );
+      if (res.data.length < 30) {
+        setHasMoreMessages(false);
+      }
+      if (res.data.length > 0) {
+        setMessages(prev => [...res.data, ...prev]);
+      }
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleSendMessage = (msgData) => {
     if (!socketInstance || !selectedUser) return
@@ -320,9 +353,14 @@ function App() {
   const handleTyping = (isTyping) => {
     if (!socketInstance || !selectedUser) return;
     if (isTyping) {
-      socketInstance.emit('typing', { receiver_id: selectedUser.id });
+      const now = Date.now();
+      if (now - lastTypingEmitRef.current > 3000) {
+        socketInstance.emit('typing', { receiver_id: selectedUser.id });
+        lastTypingEmitRef.current = now;
+      }
     } else {
       socketInstance.emit('stop_typing', { receiver_id: selectedUser.id });
+      lastTypingEmitRef.current = 0; // Reset
     }
   }
 
@@ -598,6 +636,9 @@ function App() {
           isTyping={typingUserId === selectedUser?.id}
           onViewImage={setViewingImageUrl}
           onStartCall={handleStartCall}
+          hasMoreMessages={hasMoreMessages}
+          loadingMore={loadingMore}
+          onLoadMoreMessages={handleLoadMoreMessages}
         />
         {selectedUser && (
           <MessageInput 

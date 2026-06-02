@@ -7,7 +7,12 @@ import {
   MdPalette, MdPhotoLibrary, MdClose, MdSearch, MdTranslate
 } from 'react-icons/md'
 
-export default function ChatWindow({ currentUser, selectedUser, messages, onSendMessage, serverUrl, onBack, onClearChat, onDeleteMessage, onReactMessage, onPinMessage, onReplyMessage, onForwardMessage, isSidebarHidden, onToggleSidebar, isTyping, onViewImage, onStartCall }) {
+export default function ChatWindow({ 
+  currentUser, selectedUser, messages, onSendMessage, serverUrl, onBack, 
+  onClearChat, onDeleteMessage, onReactMessage, onPinMessage, onReplyMessage, 
+  onForwardMessage, isSidebarHidden, onToggleSidebar, isTyping, onViewImage, 
+  onStartCall, hasMoreMessages, loadingMore, onLoadMoreMessages 
+}) {
   const [showMenu, setShowMenu] = useState(false)
   const [activeMessageMenu, setActiveMessageMenu] = useState(null)
   const [reactionMenuId, setReactionMenuId] = useState(null)
@@ -232,11 +237,36 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
     touchStartY.current = null;
   }
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  const isPagingRef = useRef(false)
+  const oldScrollHeightRef = useRef(0)
+  const prevSelectedUserRef = useRef(null)
+
+  const handleScroll = () => {
+    if (!scrollRef.current || loadingMore || !hasMoreMessages) return;
+    if (scrollRef.current.scrollTop <= 10) {
+      isPagingRef.current = true;
+      oldScrollHeightRef.current = scrollRef.current.scrollHeight;
+      onLoadMoreMessages();
     }
-  }, [messages])
+  };
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    
+    if (prevSelectedUserRef.current !== selectedUser?.id) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      prevSelectedUserRef.current = selectedUser?.id;
+      isPagingRef.current = false;
+      return;
+    }
+
+    if (isPagingRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight - oldScrollHeightRef.current;
+      isPagingRef.current = false;
+    } else {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, selectedUser]);
 
   if (!selectedUser) {
     return (
@@ -500,8 +530,31 @@ export default function ChatWindow({ currentUser, selectedUser, messages, onSend
       <div 
         className={`messages-container ${activeMessageMenu ? 'blurred' : ''} theme-${chatTheme} ${chatTheme === 'custom' ? 'has-custom-bg' : ''}`} 
         ref={scrollRef}
+        onScroll={handleScroll}
         style={chatTheme === 'custom' ? { backgroundImage: `url(${customWallpaperUrl})` } : {}}
       >
+        {loadingMore && (
+          <div className="paging-loader" style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '12px 10px',
+            fontSize: '0.85rem',
+            color: '#8b5cf6',
+            gap: '8px',
+            width: '100%'
+          }}>
+            <div className="spinner-loader" style={{
+              width: '14px',
+              height: '14px',
+              border: '2px solid rgba(139, 92, 246, 0.2)',
+              borderTopColor: '#8b5cf6',
+              borderRadius: '50%',
+              animation: 'spin 0.6s linear infinite'
+            }} />
+            <span>Loading chat history...</span>
+          </div>
+        )}
         <div className="date-separator">
           {formatHeaderDate()}
         </div>

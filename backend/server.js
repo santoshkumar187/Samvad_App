@@ -210,8 +210,35 @@ app.put('/api/users/:id/profile', upload.single('profile_pic'), async (req, res)
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
-    const [rows] = await pool.query('SELECT id, username, samvad_id, online, profile_pic, about, last_seen FROM users ORDER BY username ASC');
-    res.json(rows);
+    const [users] = await pool.query('SELECT id, username, samvad_id, online, profile_pic, about, last_seen FROM users ORDER BY username ASC');
+    
+    // Check friendships to mask non-friends
+    const [friendships] = await pool.query(
+      'SELECT user_id, friend_id FROM friends WHERE user_id = ? OR friend_id = ?',
+      [req.user.id, req.user.id]
+    );
+    const friendIds = new Set(friendships.map(f => f.user_id === req.user.id ? f.friend_id : f.user_id));
+    
+    const hardenedUsers = users.map(user => {
+      const isSelf = Number(user.id) === Number(req.user.id);
+      const isAI = user.samvad_id === 'ai#9999';
+      const isFriend = friendIds.has(user.id);
+      
+      if (!isSelf && !isAI && !isFriend) {
+        return {
+          id: user.id,
+          username: user.username,
+          samvad_id: user.samvad_id,
+          profile_pic: null,
+          about: "🔒 End-to-End Encrypted Profile",
+          online: false,
+          last_seen: null
+        };
+      }
+      return user;
+    });
+    
+    res.json(hardenedUsers);
   } catch (error) {
     res.status(500).json({ error: 'Database error' });
   }
@@ -228,8 +255,30 @@ app.get('/api/search', authenticateToken, async (req, res) => {
       [samvadId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    res.json(rows[0]);
+    
+    const user = rows[0];
+    const isSelf = Number(user.id) === Number(req.user.id);
+    const isAI = user.samvad_id === 'ai#9999';
+    
+    let isFriend = false;
+    if (!isSelf && !isAI) {
+      const [friendship] = await pool.query(
+        'SELECT * FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
+        [req.user.id, user.id, user.id, req.user.id]
+      );
+      isFriend = friendship.length > 0;
+    }
+    
+    // Mask details for non-friends
+    if (!isSelf && !isAI && !isFriend) {
+      user.profile_pic = null;
+      user.about = "🔒 End-to-End Encrypted Profile";
+      user.online = false;
+    }
+    
+    res.json(user);
   } catch (error) {
+    console.error('Search query failure:', error);
     res.status(500).json({ error: 'Database error' });
   }
 });

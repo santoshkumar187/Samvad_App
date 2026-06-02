@@ -472,7 +472,32 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 // Socket.io logic
-const connectedUsers = new Map(); // userId -> socketId
+const connectedUsersMap = new Map();
+const connectedUsers = {
+  set(userId, socketId) {
+    if (userId !== undefined && userId !== null) {
+      connectedUsersMap.set(Number(userId), socketId);
+    }
+  },
+  get(userId) {
+    if (userId !== undefined && userId !== null) {
+      return connectedUsersMap.get(Number(userId));
+    }
+    return undefined;
+  },
+  delete(userId) {
+    if (userId !== undefined && userId !== null) {
+      return connectedUsersMap.delete(Number(userId));
+    }
+    return false;
+  },
+  has(userId) {
+    if (userId !== undefined && userId !== null) {
+      return connectedUsersMap.has(Number(userId));
+    }
+    return false;
+  }
+};
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);

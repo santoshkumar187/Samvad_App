@@ -96,17 +96,33 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
             onClick={() => setShowSettings(!showSettings)}
           />
           {showSettings && (
-            <div className="header-dropdown" style={{ left: 'auto', right: 0 }}>
-              <div className="dropdown-item" onClick={() => { setShowProfileModal(true); setShowSettings(false); }}>
-                <MdOutlineEdit /> Edit Profile
+            <>
+              <div 
+                className="dropdown-overlay" 
+                onClick={() => setShowSettings(false)} 
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 998,
+                  background: 'transparent',
+                  cursor: 'default'
+                }} 
+              />
+              <div className="header-dropdown" style={{ left: 'auto', right: 0, zIndex: 999 }}>
+                <div className="dropdown-item" onClick={() => { setShowProfileModal(true); setShowSettings(false); }}>
+                  <MdOutlineEdit /> Edit Profile
+                </div>
+                <div className="dropdown-item" onClick={() => { onLogout(); setShowSettings(false); }}>
+                  <MdLogout /> Logout
+                </div>
+                <div className="dropdown-item" onClick={() => { onDeleteAccount(); setShowSettings(false); }} style={{ color: '#eb5757' }}>
+                  <MdDeleteSweep /> Delete Account
+                </div>
               </div>
-              <div className="dropdown-item" onClick={() => { onLogout(); setShowSettings(false); }}>
-                <MdLogout /> Logout
-              </div>
-              <div className="dropdown-item" onClick={() => { onDeleteAccount(); setShowSettings(false); }} style={{ color: '#eb5757' }}>
-                <MdDeleteSweep /> Delete Account
-              </div>
-            </div>
+            </>
           )}
         </div>
       </div>

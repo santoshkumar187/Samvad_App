@@ -8,6 +8,143 @@ import {
   MdPictureAsPdf, MdDescription, MdSlideshow, MdTableChart, MdArchive
 } from 'react-icons/md'
 
+function VoiceNotePlayer({ src, sender, isCurrentUser, serverUrl }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    const audio = new Audio(src);
+    audioRef.current = audio;
+
+    const onLoadedMetadata = () => {
+      setDuration(audio.duration || 0);
+    };
+
+    const onTimeUpdate = () => {
+      setCurrentTime(audio.currentTime || 0);
+    };
+
+    const onEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('ended', onEnded);
+
+    if (audio.readyState >= 1) {
+      setDuration(audio.duration);
+    }
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('ended', onEnded);
+    };
+  }, [src]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().catch(err => console.error('Audio play error:', err));
+      setIsPlaying(true);
+    }
+  };
+
+  const handleTimelineChange = (e) => {
+    if (!audioRef.current) return;
+    const time = Number(e.target.value);
+    audioRef.current.currentTime = time;
+    setCurrentTime(time);
+  };
+
+  const formatTime = (time) => {
+    if (isNaN(time)) return '0:00';
+    const mins = Math.floor(time / 60);
+    const secs = Math.floor(time % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Static wave bars
+  const waveBars = [
+    12, 18, 14, 25, 30, 20, 15, 28, 35, 40, 
+    22, 15, 26, 32, 18, 12, 24, 30, 28, 16, 
+    14, 22, 35, 42, 28, 18, 22, 30, 20, 12
+  ];
+
+  const avatarUrl = sender?.profile_pic 
+    ? (sender.profile_pic.startsWith('http') ? sender.profile_pic : `${serverUrl}${sender.profile_pic}`)
+    : null;
+
+  return (
+    <div className={`voice-note-player-card ${isCurrentUser ? 'sent' : 'received'}`} onClick={e => e.stopPropagation()}>
+      <div className="voice-note-avatar">
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" />
+        ) : (
+          <div className="voice-note-avatar-fallback">
+            {sender?.username?.charAt(0).toUpperCase() || 'U'}
+          </div>
+        )}
+      </div>
+
+      <button className="voice-note-play-btn" onClick={togglePlay}>
+        {isPlaying ? (
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+        )}
+      </button>
+
+      <div className="voice-note-waveform-container">
+        <div className="voice-note-wave-visual">
+          {waveBars.map((barHeight, idx) => {
+            const barProgress = (idx / waveBars.length) * 100;
+            const isPlayed = progressPercent > barProgress;
+            return (
+              <div 
+                key={idx} 
+                className={`voice-note-wave-bar ${isPlayed ? 'played' : ''}`}
+                style={{ 
+                  height: `${barHeight}px`,
+                  backgroundColor: isPlayed ? 'var(--brand-violet)' : 'rgba(255, 255, 255, 0.25)'
+                }}
+              />
+            );
+          })}
+        </div>
+        
+        <input 
+          type="range"
+          min="0"
+          max={duration || 100}
+          value={currentTime}
+          onChange={handleTimelineChange}
+          className="voice-note-slider"
+        />
+
+        <div className="voice-note-time-info">
+          <span>{formatTime(currentTime)}</span>
+          <span>{formatTime(duration)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatWindow({ 
   currentUser, selectedUser, messages, onSendMessage, serverUrl, onBack, 
   onClearChat, onDeleteMessage, onReactMessage, onPinMessage, onReplyMessage, 
@@ -395,7 +532,13 @@ export default function ChatWindow({
       case 'video':
         return <video src={msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`} controls className="message-video" />
       case 'audio':
-        return <audio src={msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`} controls className="message-audio" />
+        const audioSrc = msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`;
+        const senderObj = msg.sender_id === currentUser.id 
+          ? currentUser 
+          : (selectedUser.isGroup 
+              ? { username: msg.sender_name, profile_pic: msg.sender_profile_pic } 
+              : selectedUser);
+        return <VoiceNotePlayer src={audioSrc} sender={senderObj} isCurrentUser={msg.sender_id === currentUser.id} serverUrl={serverUrl} />
       case 'file':
         const fileDetails = getFileCardDetails(msg.content);
         return (
@@ -489,28 +632,54 @@ export default function ChatWindow({
           <MdArrowBack />
         </div>
         <div className="user-avatar" 
-          onClick={() => selectedUser.profile_pic && onViewImage(selectedUser.profile_pic.startsWith('http') ? selectedUser.profile_pic : `${serverUrl}${selectedUser.profile_pic}`)}
-          style={{width: '40px', height:'40px', fontSize:'1.1rem', margin:0, background: 'var(--brand-violet)', cursor: 'pointer'}}>
-          {selectedUser.profile_pic ? (
-            <img src={selectedUser.profile_pic.startsWith('http') ? selectedUser.profile_pic : `${serverUrl}${selectedUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+          onClick={() => {
+            if (selectedUser.isGroup) {
+              if (selectedUser.avatar) onViewImage(selectedUser.avatar);
+            } else if (selectedUser.profile_pic) {
+              onViewImage(selectedUser.profile_pic.startsWith('http') ? selectedUser.profile_pic : `${serverUrl}${selectedUser.profile_pic}`);
+            }
+          }}
+          style={{width: '40px', height:'40px', fontSize:'1.1rem', margin:0, background: 'var(--brand-violet)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+          {selectedUser.isGroup ? (
+            selectedUser.avatar ? (
+              <img src={selectedUser.avatar} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (
+              selectedUser.name.charAt(0).toUpperCase()
+            )
           ) : (
-            selectedUser.username.charAt(0).toUpperCase()
+            selectedUser.profile_pic ? (
+              <img src={selectedUser.profile_pic.startsWith('http') ? selectedUser.profile_pic : `${serverUrl}${selectedUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (
+              selectedUser.username.charAt(0).toUpperCase()
+            )
           )}
         </div>
         <div className="chat-header-info">
-          <h3>{selectedUser.username}</h3>
-          <span style={{ textTransform: 'lowercase' }}>{selectedUser.online ? 'Online' : formatLastSeen(selectedUser.last_seen)}</span>
+          <h3>{selectedUser.isGroup ? selectedUser.name : selectedUser.username}</h3>
+          {selectedUser.isGroup ? (
+            <span style={{ textTransform: 'none', color: isTyping ? 'var(--brand-violet)' : 'inherit' }}>
+              {isTyping ? `${isTyping} typing...` : `${selectedUser.members?.length || 0} members: ${selectedUser.members?.map(m => m.username).join(', ')}`}
+            </span>
+          ) : (
+            <span style={{ textTransform: 'lowercase', color: isTyping ? 'var(--brand-violet)' : 'inherit' }}>
+              {isTyping ? 'typing...' : (selectedUser.online ? 'Online' : formatLastSeen(selectedUser.last_seen))}
+            </span>
+          )}
         </div>
         <div className="chat-header-actions" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '15px' }}>
           <div className="header-action-btn" onClick={() => setShowSearch(!showSearch)} title="Search Messages" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
             <MdSearch size={22} />
           </div>
-          <div className="header-action-btn" onClick={() => onStartCall('audio')} title="Audio Call" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <MdCall size={22} />
-          </div>
-          <div className="header-action-btn" onClick={() => onStartCall('video')} title="Video Call" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <MdVideocam size={22} />
-          </div>
+          {!selectedUser.isGroup && (
+            <>
+              <div className="header-action-btn" onClick={() => onStartCall('audio')} title="Audio Call" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <MdCall size={22} />
+              </div>
+              <div className="header-action-btn" onClick={() => onStartCall('video')} title="Video Call" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <MdVideocam size={22} />
+              </div>
+            </>
+          )}
           <div className="header-action-btn desktop-only" onClick={onToggleSidebar} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }} title={isSidebarHidden ? "Exit Fullscreen" : "Fullscreen Chat"}>
             {isSidebarHidden ? <MdFullscreenExit size={24} /> : <MdFullscreen size={24} />}
           </div>
@@ -539,23 +708,25 @@ export default function ChatWindow({
                 <div className="dropdown-item" onClick={handleSummarize}>
                   <MdInfoOutline /> AI Summarize Chat
                 </div>
-                <div className="dropdown-item" onClick={async (e) => {
-                  e.stopPropagation();
-                  console.log('Bulk delete requested');
-                  if (window.confirm('Clear all messages in this chat?')) {
-                    try {
-                      await axios.delete(`${serverUrl}/api/messages/${currentUser.id}/${selectedUser.id}`)
-                      console.log('Bulk delete success');
-                      onClearChat()
-                      setShowMenu(false)
-                    } catch (err) {
-                      console.error('Bulk delete failed', err);
-                      alert('Failed to clear chat')
+                {!selectedUser.isGroup && (
+                  <div className="dropdown-item" onClick={async (e) => {
+                    e.stopPropagation();
+                    console.log('Bulk delete requested');
+                    if (window.confirm('Clear all messages in this chat?')) {
+                      try {
+                        await axios.delete(`${serverUrl}/api/messages/${currentUser.id}/${selectedUser.id}`)
+                        console.log('Bulk delete success');
+                        onClearChat()
+                        setShowMenu(false)
+                      } catch (err) {
+                        console.error('Bulk delete failed', err);
+                        alert('Failed to clear chat')
+                      }
                     }
-                  }
-                }}>
-                  <MdDeleteOutline /> Clear Chat
-                </div>
+                  }}>
+                    <MdDeleteOutline /> Clear Chat
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -710,6 +881,11 @@ export default function ChatWindow({
                 onMouseUp={(e) => handleTouchEnd(e, msg)}
                 onMouseLeave={(e) => swipingMessageId === msg.id && handleTouchEnd(e, msg)}
               >
+                {selectedUser.isGroup && !isSender && (
+                  <div className="message-sender-name-tag" style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#c084fc', marginBottom: '4px', cursor: 'pointer' }}>
+                    {msg.sender_name || 'Someone'}
+                  </div>
+                )}
                 {msg.reply_to && (
                   <div className="message-reply-quote">
                     <strong>{msg.parent_sender_name === currentUser.username ? 'You' : msg.parent_sender_name}</strong>

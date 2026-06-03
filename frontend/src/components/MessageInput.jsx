@@ -1,19 +1,27 @@
 import React, { useState, useRef } from 'react'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import axios from 'axios'
-import { MdInsertEmoticon, MdAdd, MdMic, MdInsertPhoto, MdSend, MdCameraAlt } from 'react-icons/md'
+import { MdInsertEmoticon, MdAdd, MdMic, MdInsertPhoto, MdSend, MdCameraAlt, MdDeleteOutline } from 'react-icons/md'
 
 export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onCancelReply, onTyping }) {
   const [text, setText] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
   
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const typingTimeoutRef = useRef(null)
+
+  const canvasRef = useRef(null)
+  const audioContextRef = useRef(null)
+  const analyserRef = useRef(null)
+  const animationFrameRef = useRef(null)
+  const streamRef = useRef(null)
+  const timerIntervalRef = useRef(null)
 
   const handleSend = () => {
     if (!text.trim()) return
@@ -48,6 +56,95 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
     setText(prev => prev + emojiObject.emoji)
   }
 
+  const startVisualizer = (stream) => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256; 
+      analyserRef.current = analyser;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      const draw = () => {
+        if (!analyserRef.current) return;
+        animationFrameRef.current = requestAnimationFrame(draw);
+
+        analyser.getByteTimeDomainData(dataArray);
+
+        const width = canvas.width;
+        const height = canvas.height;
+
+        ctx.fillStyle = '#1e1e2d'; 
+        ctx.fillRect(0, 0, width, height);
+
+        // Draw center reference line
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.1)'; 
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, height / 2);
+        ctx.lineTo(width, height / 2);
+        ctx.stroke();
+
+        // Draw neon glowing wave
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#a78bfa'; 
+        ctx.shadowColor = '#8b5cf6'; 
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+
+        const sliceWidth = width / bufferLength;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          const v = dataArray[i] / 128.0;
+          const y = (v * height) / 2;
+
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+
+          x += sliceWidth;
+        }
+
+        ctx.lineTo(width, height / 2);
+        ctx.stroke();
+        
+        ctx.shadowBlur = 0; // reset
+      };
+
+      draw();
+    } catch (err) {
+      console.error('Visualizer error:', err);
+    }
+  };
+
+  const stopVisualizer = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      if (audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+      }
+      audioContextRef.current = null;
+    }
+    analyserRef.current = null;
+  };
+
   const startRecording = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert('Your browser does not support audio recording or you are not in a secure (HTTPS) context.');
@@ -55,6 +152,8 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream;
+
       const mediaRecorder = new MediaRecorder(stream)
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = [];
@@ -66,18 +165,34 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
       }
 
       mediaRecorder.onstop = async () => {
+        stopVisualizer();
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
         const audioFile = new File([audioBlob], `voice-note-${Date.now()}.webm`, { type: 'audio/webm' })
         
-        // Upload the recorded file
         await uploadFile(audioFile)
         
-        // Stop all tracks to release microphone
         stream.getTracks().forEach(track => track.stop())
+        streamRef.current = null;
       }
 
       mediaRecorder.start()
       setIsRecording(true)
+
+      // Start Visualizer and Timer
+      setTimeout(() => {
+        startVisualizer(stream);
+      }, 100);
+
+      setRecordingTime(0);
+      timerIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+
     } catch (err) {
       console.error('Microphone access denied', err)
       alert('Microphone access is required to record voice notes.')
@@ -90,6 +205,32 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
       setIsRecording(false)
     }
   }
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      audioChunksRef.current = [];
+      mediaRecorderRef.current.onstop = null; 
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      stopVisualizer();
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+      
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    }
+  }
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const compressImage = (file) => {
     return new Promise((resolve) => {
@@ -205,41 +346,57 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
         </div>
       )}
       <div className={`input-area ${isRecording ? 'recording' : ''}`}>
-        <div className="input-pill-wrapper">
-          <div className="emoji-icon" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
-            <MdInsertEmoticon />
-          </div>
-
-          {showEmojiPicker && (
-            <div className="emoji-picker-container">
-              <EmojiPicker onEmojiClick={onEmojiClick} theme={Theme.DARK} />
+        {isRecording ? (
+          <div className="recording-panel-wrapper">
+            <div className="recording-indicator">
+              <span className="blinking-red-dot"></span>
+              <span className="recording-timer">{formatTime(recordingTime)}</span>
             </div>
-          )}
-          
-          <input 
-            type="text" 
-            className="message-input"
-            placeholder={isRecording ? "Recording audio..." : (isUploading ? "Uploading..." : "Message")}
-            value={text}
-            onChange={handleTextChange}
-            onKeyDown={handleKeyDown}
-            disabled={isUploading || isRecording}
-          />
+            
+            <div className="visualizer-container">
+              <canvas ref={canvasRef} className="glowing-waveform-canvas" width="160" height="32" />
+            </div>
 
-          <div className="input-pill-actions">
-            <MdCameraAlt onClick={() => cameraInputRef.current.click()} />
-            <MdMic onClick={startRecording} />
+            <div className="recording-actions">
+              <MdDeleteOutline className="cancel-recording-btn" onClick={cancelRecording} title="Discard Recording" />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="input-pill-wrapper">
+            <div className="emoji-icon" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
+              <MdInsertEmoticon />
+            </div>
+
+            {showEmojiPicker && (
+              <div className="emoji-picker-container">
+                <EmojiPicker onEmojiClick={onEmojiClick} theme={Theme.DARK} />
+              </div>
+            )}
+            
+            <input 
+              type="text" 
+              className="message-input"
+              placeholder={isUploading ? "Uploading..." : "Message"}
+              value={text}
+              onChange={handleTextChange}
+              onKeyDown={handleKeyDown}
+              disabled={isUploading}
+            />
+
+            <div className="input-pill-actions">
+              <MdCameraAlt onClick={() => cameraInputRef.current.click()} />
+              <MdMic onClick={startRecording} />
+            </div>
+          </div>
+        )}
 
         <div className="action-circle-btn">
           {text.trim().length > 0 ? (
             <MdSend onClick={handleSend} />
           ) : (
             isRecording ? (
-              <div className="stop-recording-btn" onClick={stopRecording}>
-                <div className="pulsating-dot"></div>
-                <MdSend style={{color: '#ff4b4b'}} />
+              <div className="stop-recording-btn send-recording" onClick={stopRecording} title="Send Voice Note">
+                <MdSend style={{color: '#fff'}} />
               </div>
             ) : (
               <MdAdd onClick={() => fileInputRef.current.click()} />

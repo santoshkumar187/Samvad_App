@@ -112,7 +112,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-app.get('/api/view-pdf', (req, res) => {
+app.get('/api/view-pdf', async (req, res) => {
   const fileUrl = req.query.url;
   if (!fileUrl) {
     return res.status(400).send('Missing url parameter');
@@ -123,21 +123,67 @@ app.get('/api/view-pdf', (req, res) => {
     return res.redirect(fileUrl);
   }
 
-  const https = require('https');
-  const http = require('http');
-  const client = fileUrl.startsWith('https') ? https : http;
+  try {
+    const axios = require('axios');
+    let targetUrl = fileUrl;
 
-  client.get(fileUrl, (response) => {
-    if (response.statusCode !== 200) {
-      return res.status(response.statusCode).send('Failed to fetch PDF from storage');
+    // Parse Cloudinary URL parameters to sign the request if it's a Cloudinary URL
+    try {
+      const parsedUrl = new URL(fileUrl);
+      const pathParts = parsedUrl.pathname.split('/');
+      // pathParts[0] is "", pathParts[1] is cloud_name, pathParts[2] is resource_type, pathParts[3] is type
+      if (pathParts.length >= 5) {
+        const resourceType = pathParts[2];
+        const type = pathParts[3];
+        let publicIdParts = pathParts.slice(4);
+        // Strip version if present (e.g. v12345678)
+        if (publicIdParts.length > 0 && /^v\d+$/.test(publicIdParts[0])) {
+          publicIdParts = publicIdParts.slice(1);
+        }
+        const publicId = decodeURIComponent(publicIdParts.join('/'));
+        
+        // Generate a signed URL using private_download_url
+        targetUrl = cloudinary.utils.private_download_url(publicId, '', {
+          resource_type: resourceType,
+          type: type
+        });
+      }
+    } catch (parseErr) {
+      console.error('Failed to parse and sign Cloudinary URL, falling back to original URL:', parseErr.message);
     }
+
+    const response = await axios({
+      method: 'get',
+      url: targetUrl,
+      responseType: 'stream'
+    });
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="document.pdf"');
-    response.pipe(res);
-  }).on('error', (err) => {
-    console.error('Error proxying PDF:', err);
-    res.status(500).send('Error loading PDF document');
-  });
+    response.data.pipe(res);
+  } catch (err) {
+    console.error('Error proxying PDF via axios:', err.message);
+    res.status(500).send('Failed to fetch PDF from storage');
+  }
+});
+
+app.get('/api/check-availability', async (req, res) => {
+  const { username, email } = req.query;
+  try {
+    const pool = getPool();
+    if (username) {
+      const [rows] = await pool.query('SELECT id FROM users WHERE username = ?', [username.trim()]);
+      return res.json({ available: rows.length === 0 });
+    }
+    if (email) {
+      const [rows] = await pool.query('SELECT id FROM users WHERE email = ?', [email.trim()]);
+      return res.json({ available: rows.length === 0 });
+    }
+    res.status(400).json({ error: 'Provide username or email parameter' });
+  } catch (err) {
+    console.error('Error checking availability:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 app.post('/api/register', async (req, res) => {
@@ -150,6 +196,7 @@ app.post('/api/register', async (req, res) => {
     if (rows.length > 0) return res.status(400).json({ error: 'Username or email already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    
     // Generate unique samvad_id
     const samvadId = `${username.toLowerCase()}#${Math.floor(1000 + Math.random() * 9000)}`;
     
@@ -166,6 +213,34 @@ app.post('/api/register', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/forgot-password/reset', async (req, res) => {
+  const { identifier, newPassword } = req.body;
+  if (!identifier || !newPassword) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  try {
+    const pool = getPool();
+    const [rows] = await pool.query(
+      'SELECT * FROM users WHERE username = ? OR email = ? OR samvad_id = ?',
+      [identifier, identifier, identifier]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = rows[0];
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedNewPassword, user.id]);
+
+    res.json({ success: true, message: 'Password reset successful' });
+  } catch (err) {
+    console.error('Password reset error:', err);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 
@@ -534,6 +609,160 @@ app.get('/api/messages/:user1/:user2', async (req, res) => {
   }
 });
 
+app.post('/api/groups', authenticateToken, upload.single('avatar'), async (req, res) => {
+  const { name, members } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Group name is required' });
+  }
+
+  let memberIds = [];
+  try {
+    memberIds = JSON.parse(members);
+  } catch (e) {
+    memberIds = Array.isArray(members) ? members : (members ? [members] : []);
+  }
+
+  // Creator is automatically a member
+  const creatorId = req.user.id;
+  if (!memberIds.includes(creatorId)) {
+    memberIds.push(creatorId);
+  }
+
+  // Ensure all members are numbers/integers
+  memberIds = memberIds.map(Number).filter(id => !isNaN(id));
+
+  try {
+    const pool = getPool();
+    let avatarUrl = null;
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer, {
+        folder: 'samvad/groups',
+        resource_type: 'image',
+        public_id: `group_${Date.now()}`
+      });
+      avatarUrl = result.secure_url;
+    }
+
+    // Insert group
+    const [groupResult] = await pool.query(
+      'INSERT INTO `groups` (name, avatar, creator_id) VALUES (?, ?, ?)',
+      [name.trim(), avatarUrl, creatorId]
+    );
+    const groupId = groupResult.insertId;
+
+    // Insert members
+    for (const memberId of memberIds) {
+      await pool.query(
+        'INSERT IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)',
+        [groupId, memberId]
+      );
+    }
+
+    // Fetch created group info
+    const [groupRows] = await pool.query('SELECT * FROM `groups` WHERE id = ?', [groupId]);
+    const group = groupRows[0];
+    group.isGroup = true;
+
+    // Fetch members detail for the response
+    const [memberRows] = await pool.query(`
+      SELECT id, username, samvad_id, online, profile_pic, about 
+      FROM users 
+      WHERE id IN (?)
+    `, [memberIds]);
+
+    group.members = memberRows;
+
+    // Notify all online group members via Socket
+    memberIds.forEach(memberId => {
+      const socketId = connectedUsers.get(memberId);
+      if (socketId) {
+        io.to(socketId).emit('group_created', { group, members: memberIds });
+      }
+    });
+
+    res.json(group);
+  } catch (error) {
+    console.error('Failed to create group:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.get('/api/groups', authenticateToken, async (req, res) => {
+  try {
+    const pool = getPool();
+    // Fetch all groups where the user is a member
+    const [groups] = await pool.query(`
+      SELECT g.*, TRUE as isGroup
+      FROM \`groups\` g
+      JOIN group_members gm ON g.id = gm.group_id
+      WHERE gm.user_id = ?
+      ORDER BY g.created_at DESC
+    `, [req.user.id]);
+
+    // For each group, fetch members
+    for (const group of groups) {
+      const [members] = await pool.query(`
+        SELECT u.id, u.username, u.samvad_id, u.profile_pic, u.online, u.about
+        FROM users u
+        JOIN group_members gm ON u.id = gm.user_id
+        WHERE gm.group_id = ?
+      `, [group.id]);
+      group.members = members;
+    }
+
+    res.json(groups);
+  } catch (error) {
+    console.error('Failed to fetch groups:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.get('/api/messages/group/:groupId', authenticateToken, async (req, res) => {
+  const { groupId } = req.params;
+  const beforeId = req.query.beforeId ? parseInt(req.query.beforeId) : null;
+  const limit = req.query.limit ? parseInt(req.query.limit) : 30;
+
+  try {
+    const pool = getPool();
+    
+    // Check if the user is a member of this group
+    const [membership] = await pool.query(
+      'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?',
+      [groupId, req.user.id]
+    );
+    if (membership.length === 0) {
+      return res.status(403).json({ error: 'Not a member of this group' });
+    }
+
+    let query = `
+      SELECT m.*, u.username as sender_name, u.profile_pic as sender_profile_pic,
+             p.content as parent_content, p.sender_id as parent_sender_id, pu.username as parent_sender_name
+      FROM messages m
+      JOIN users u ON m.sender_id = u.id
+      LEFT JOIN messages p ON m.reply_to = p.id
+      LEFT JOIN users pu ON p.sender_id = pu.id
+      WHERE m.group_id = ?
+    `;
+    const params = [groupId];
+
+    if (beforeId) {
+      query += ` AND m.id < ?`;
+      params.push(beforeId);
+    }
+
+    query += ` ORDER BY m.id DESC LIMIT ?`;
+    params.push(limit);
+
+    const [rows] = await pool.query(query, params);
+    
+    // Reverse back to ascending time order
+    res.json(rows.reverse());
+  } catch (error) {
+    console.error('Paginated group messages query failed:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.delete('/api/messages/:user1/:user2', async (req, res) => {
   const { user1, user2 } = req.params;
   try {
@@ -589,7 +818,11 @@ app.post('/api/messages/:id/delete', async (req, res) => {
         }
       }
       await pool.query('DELETE FROM messages WHERE id = ?', [id]);
-      io.emit('message_deleted', { messageId: parseInt(id), sender_id: msg.sender_id, receiver_id: msg.receiver_id });
+      if (msg.group_id) {
+        io.to(`group_${msg.group_id}`).emit('message_deleted', { messageId: parseInt(id), group_id: msg.group_id });
+      } else {
+        io.emit('message_deleted', { messageId: parseInt(id), sender_id: msg.sender_id, receiver_id: msg.receiver_id });
+      }
     } else {
       // Delete for me (soft delete)
       if (msg.sender_id === userId) {
@@ -694,10 +927,21 @@ io.on('connection', (socket) => {
           io.to(friendSocketId).emit('user_status_change', { userId, online: true });
         }
       });
+
+      // Join all group rooms the user is in
+      const [userGroups] = await pool.query('SELECT group_id FROM group_members WHERE user_id = ?', [userId]);
+      userGroups.forEach(g => {
+        socket.join(`group_${g.group_id}`);
+      });
       
     } catch(err) {
       console.error(err);
     }
+  });
+
+  socket.on('join_group', ({ groupId }) => {
+    socket.join(`group_${groupId}`);
+    console.log(`Socket ${socket.id} (user ${socket.userId}) joined group room group_${groupId}`);
   });
 
   socket.on('send_message', async (data) => {
@@ -705,11 +949,20 @@ io.on('connection', (socket) => {
     try {
       const pool = getPool();
       
-      // Save sender's message in DB
-      const [result] = await pool.query(
-        'INSERT INTO messages (sender_id, receiver_id, content, type, file_url, reply_to, is_forwarded) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [data.sender_id, data.receiver_id, data.content, data.type || 'text', data.file_url || null, data.reply_to || null, data.is_forwarded || false]
-      );
+      let result;
+      if (data.group_id) {
+        // Save group message in DB
+        [result] = await pool.query(
+          'INSERT INTO messages (sender_id, group_id, content, type, file_url, reply_to, is_forwarded) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [data.sender_id, data.group_id, data.content, data.type || 'text', data.file_url || null, data.reply_to || null, data.is_forwarded || false]
+        );
+      } else {
+        // Save sender's message in DB
+        [result] = await pool.query(
+          'INSERT INTO messages (sender_id, receiver_id, content, type, file_url, reply_to, is_forwarded) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [data.sender_id, data.receiver_id, data.content, data.type || 'text', data.file_url || null, data.reply_to || null, data.is_forwarded || false]
+        );
+      }
       
       // Fetch full message with parent info if it's a reply
       let parentInfo = {};
@@ -723,10 +976,17 @@ io.on('connection', (socket) => {
         }
       }
 
+      // Fetch sender details
+      const [senderRow] = await pool.query('SELECT username, profile_pic FROM users WHERE id = ?', [data.sender_id]);
+      const senderName = senderRow[0]?.username || 'Someone';
+      const senderProfilePic = senderRow[0]?.profile_pic || null;
+
       const newMsg = {
         id: result.insertId,
         ...data,
         ...parentInfo,
+        sender_name: senderName,
+        sender_profile_pic: senderProfilePic,
         timestamp: new Date()
       };
 
@@ -735,6 +995,12 @@ io.on('connection', (socket) => {
         ...newMsg,
         correlationId: data.correlationId
       });
+
+      if (data.group_id) {
+        // Broadcast to group room (except sender, since they already got 'message_sent')
+        socket.to(`group_${data.group_id}`).emit('receive_message', newMsg);
+        return;
+      }
 
       // Detect if receiver is the persistent AI chatbot assistant
       const [aiUser] = await pool.query('SELECT id FROM users WHERE samvad_id = ?', ['ai#9999']);
@@ -848,17 +1114,25 @@ io.on('connection', (socket) => {
   });
 
   socket.on('typing', (data) => {
-    // data: { receiver_id }
-    const receiverSocketId = connectedUsers.get(data.receiver_id);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('user_typing', { userId: socket.userId });
+    // data: { receiver_id, group_id }
+    if (data.group_id) {
+      socket.to(`group_${data.group_id}`).emit('user_typing', { userId: socket.userId, groupId: data.group_id, username: socket.username });
+    } else {
+      const receiverSocketId = connectedUsers.get(data.receiver_id);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('user_typing', { userId: socket.userId });
+      }
     }
   });
 
   socket.on('stop_typing', (data) => {
-    const receiverSocketId = connectedUsers.get(data.receiver_id);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('user_stopped_typing', { userId: socket.userId });
+    if (data.group_id) {
+      socket.to(`group_${data.group_id}`).emit('user_stopped_typing', { userId: socket.userId, groupId: data.group_id, username: socket.username });
+    } else {
+      const receiverSocketId = connectedUsers.get(data.receiver_id);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('user_stopped_typing', { userId: socket.userId });
+      }
     }
   });
 

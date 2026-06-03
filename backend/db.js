@@ -72,6 +72,28 @@ async function initDB() {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS \`groups\` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        avatar VARCHAR(255) DEFAULT NULL,
+        creator_id INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS group_members (
+        group_id INT,
+        user_id INT,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (group_id, user_id),
+        FOREIGN KEY (group_id) REFERENCES \`groups\`(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS messages (
         id INT AUTO_INCREMENT PRIMARY KEY,
         sender_id INT,
@@ -127,6 +149,26 @@ async function initDB() {
       await pool.query("ALTER TABLE messages ADD COLUMN is_pinned BOOLEAN DEFAULT false");
       await pool.query("ALTER TABLE messages ADD COLUMN deleted_for_sender BOOLEAN DEFAULT false");
       await pool.query("ALTER TABLE messages ADD COLUMN deleted_for_receiver BOOLEAN DEFAULT false");
+    }
+
+    const [msgGroupCols] = await pool.query("SHOW COLUMNS FROM messages LIKE 'group_id'");
+    if (msgGroupCols.length === 0) {
+      console.log('Migrating: Adding group_id column to messages...');
+      await pool.query("ALTER TABLE messages ADD COLUMN group_id INT NULL DEFAULT NULL AFTER receiver_id");
+      await pool.query("ALTER TABLE messages ADD CONSTRAINT fk_messages_group FOREIGN KEY (group_id) REFERENCES \`groups\`(id) ON DELETE CASCADE");
+      console.log('Migrated: Added group_id and constraint to messages.');
+    }
+
+    // Migration: Add security columns to users table
+    const [securityQuestionCols] = await pool.query("SHOW COLUMNS FROM users LIKE 'security_question'");
+    if (securityQuestionCols.length === 0) {
+      console.log('Migrating: Adding security_question column to users...');
+      await pool.query("ALTER TABLE users ADD COLUMN security_question VARCHAR(255) NULL");
+    }
+    const [securityAnswerCols] = await pool.query("SHOW COLUMNS FROM users LIKE 'security_answer'");
+    if (securityAnswerCols.length === 0) {
+      console.log('Migrating: Adding security_answer column to users...');
+      await pool.query("ALTER TABLE users ADD COLUMN security_answer VARCHAR(255) NULL");
     }
 
     // Seed AI Assistant user

@@ -6,7 +6,7 @@ import ChatWindow from './components/ChatWindow'
 import MessageInput from './components/MessageInput'
 import CallModal from './components/CallModal'
 import CallWindow from './components/CallWindow'
-import { MdVisibility, MdVisibilityOff, MdChatBubble, MdPerson, MdEmail, MdLock, MdCall } from 'react-icons/md'
+import { MdVisibility, MdVisibilityOff, MdChatBubble, MdPerson, MdEmail, MdLock, MdCall, MdHelpOutline, MdRefresh, MdShield } from 'react-icons/md'
 import { FaGoogle, FaApple } from 'react-icons/fa'
 import { playNotificationSound, playSentSound, startIncomingCallRing, startDialingSound, stopCallSound } from './utils/audio'
 
@@ -36,6 +36,180 @@ function App() {
   const [socketInstance, setSocketInstance] = useState(null)
   const [toasts, setToasts] = useState([])
 
+  const [usernameAvailable, setUsernameAvailable] = useState(null)
+  const [emailAvailable, setEmailAvailable] = useState(null)
+  const [usernameChecking, setUsernameChecking] = useState(false)
+  const [emailChecking, setEmailChecking] = useState(false)
+  // Forgot password state
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotIdentifier, setForgotIdentifier] = useState('')
+  const [forgotNewPassword, setForgotNewPassword] = useState('')
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('')
+  const [captchaCode, setCaptchaCode] = useState('')
+  const [captchaInput, setCaptchaInput] = useState('')
+  const [forgotError, setForgotError] = useState('')
+  const [forgotSuccess, setForgotSuccess] = useState('')
+
+  const generateCaptcha = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCaptchaCode(result);
+    setCaptchaInput('');
+  };
+
+  useEffect(() => {
+    if (showForgotPassword) {
+      generateCaptcha();
+      setForgotIdentifier('');
+      setForgotAnswer('');
+      setForgotNewPassword('');
+      setForgotConfirmPassword('');
+      setForgotError('');
+      setForgotSuccess('');
+    }
+  }, [showForgotPassword]);
+
+  // Debounced check availability for username
+  useEffect(() => {
+    if (isLoginMode || !usernameInput.trim()) {
+      setUsernameAvailable(null);
+      return;
+    }
+    setUsernameChecking(true);
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const res = await axios.get(`${SERVER_URL}/api/check-availability?username=${encodeURIComponent(usernameInput.trim())}`);
+        setUsernameAvailable(res.data.available);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setUsernameChecking(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounce);
+  }, [usernameInput, isLoginMode]);
+
+  // Debounced check availability for email
+  useEffect(() => {
+    if (isLoginMode || !emailInput.trim()) {
+      setEmailAvailable(null);
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailInput.trim())) {
+      setEmailAvailable(false);
+      return;
+    }
+    setEmailChecking(true);
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const res = await axios.get(`${SERVER_URL}/api/check-availability?email=${encodeURIComponent(emailInput.trim())}`);
+        setEmailAvailable(res.data.available);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setEmailChecking(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounce);
+  }, [emailInput, isLoginMode]);
+
+  const getPasswordStrength = (pass) => {
+    if (!pass) return { score: 0, label: '', color: 'transparent' };
+    let score = 0;
+    if (pass.length >= 8) score += 1;
+    if (/[A-Z]/.test(pass)) score += 1;
+    if (/[0-9]/.test(pass)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+    
+    if (pass.length < 6) {
+      return { score: 1, label: 'Too Short', color: '#ef4444' };
+    }
+    if (score <= 1) return { score: 1, label: 'Weak', color: '#ef4444' };
+    if (score === 2) return { score: 2, label: 'Fair', color: '#f97316' };
+    if (score === 3) return { score: 3, label: 'Good', color: '#eab308' };
+    return { score: 4, label: 'Strong', color: '#22c55e' };
+  };
+
+  const handleForgotPasswordReset = async (e) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotSuccess('');
+
+    if (!forgotIdentifier.trim() || !forgotNewPassword.trim() || !forgotConfirmPassword.trim()) {
+      setForgotError('Please fill in all fields');
+      return;
+    }
+
+    if (captchaInput.toUpperCase().trim() !== captchaCode) {
+      setForgotError('Invalid CAPTCHA code');
+      generateCaptcha();
+      return;
+    }
+
+    if (forgotNewPassword.length < 8) {
+      setForgotError('Password must be at least 8 characters');
+      return;
+    }
+
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotError('Passwords do not match');
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${SERVER_URL}/api/forgot-password/reset`, {
+        identifier: forgotIdentifier,
+        newPassword: forgotNewPassword
+      });
+      if (res.data.success) {
+        setForgotSuccess('Password reset successfully!');
+        setTimeout(() => {
+          setShowForgotPassword(false);
+        }, 2000);
+      }
+    } catch (err) {
+      setForgotError(err.response?.data?.error || 'Failed to reset password');
+      generateCaptcha();
+    }
+  };
+
+  const renderCaptchaDisplay = () => {
+    return (
+      <div className="captcha-display-box" onClick={generateCaptcha} title="Click to refresh CAPTCHA">
+        <div className="captcha-noise-line-1"></div>
+        <div className="captcha-noise-line-2"></div>
+        {captchaCode.split('').map((char, index) => {
+          const rotation = (index % 2 === 0 ? 1 : -1) * (10 + (index * 5) % 15);
+          const offset = (index * 3) % 7 - 3;
+          const randomColor = `hsl(${(index * 60) % 360}, 70%, 75%)`;
+          return (
+            <span 
+              key={index} 
+              style={{
+                transform: `rotate(${rotation}deg) translateY(${offset}px)`,
+                color: randomColor,
+                display: 'inline-block',
+                margin: '0 4px',
+                fontWeight: 'bold',
+                fontSize: '1.4rem',
+                fontFamily: 'monospace',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+              }}
+            >
+              {char}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
   // Request Notification Permissions on Startup
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -50,7 +224,8 @@ function App() {
       message: msg.content || 'Sent a media file',
       senderName: sender.username,
       senderId: sender.id,
-      senderAvatar: sender.profile_pic
+      senderAvatar: sender.profile_pic,
+      isGroup: sender.isGroup
     };
     setToasts(prev => [...prev, newToast]);
     setTimeout(() => {
@@ -66,6 +241,7 @@ function App() {
   const [forwardingMessage, setForwardingMessage] = useState(null)
   const [isSidebarHidden, setIsSidebarHidden] = useState(false)
   const [typingUserId, setTypingUserId] = useState(null)
+  const [groupTyping, setGroupTyping] = useState({})
   const [viewingImageUrl, setViewingImageUrl] = useState(null)
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -107,11 +283,31 @@ function App() {
     if (isLoginMode && !usernameInput.trim()) return 
     if (!isLoginMode && (!usernameInput.trim() || !emailInput.trim())) return
 
+    if (!isLoginMode) {
+      const strength = getPasswordStrength(passwordInput);
+      if (strength.score < 2) {
+        alert('Password is too weak. It must be at least 6 characters and should be stronger.');
+        return;
+      }
+      if (usernameAvailable === false) {
+        alert('Username is already taken.');
+        return;
+      }
+      if (emailAvailable === false) {
+        alert('Email is already taken or invalid.');
+        return;
+      }
+    }
+
     try {
       const endpoint = isLoginMode ? '/api/login' : '/api/register'
       const payload = isLoginMode 
-        ? { identifier: usernameInput, password: passwordInput }
-        : { username: usernameInput, email: emailInput, password: passwordInput }
+        ? { identifier: usernameInput.trim(), password: passwordInput }
+        : { 
+            username: usernameInput.trim(), 
+            email: emailInput.trim(), 
+            password: passwordInput
+          }
         
       const res = await axios.post(`${SERVER_URL}${endpoint}`, payload)
       const { user, token } = res.data;
@@ -134,63 +330,115 @@ function App() {
   useEffect(() => {
     if (!currentUser || !socketInstance) return
 
-    // Initial fetch - only friends
-    const fetchFriends = async () => {
+    // Initial fetch - friends and groups
+    const fetchChats = async () => {
       try {
-        const res = await axios.get(`${SERVER_URL}/api/friends`)
-        setUsers(res.data)
+        const [friendsRes, groupsRes] = await Promise.all([
+          axios.get(`${SERVER_URL}/api/friends`),
+          axios.get(`${SERVER_URL}/api/groups`)
+        ]);
+        const merged = [...friendsRes.data, ...groupsRes.data];
+        
+        merged.sort((a, b) => {
+          const pinA = a.is_pinned ? 1 : 0;
+          const pinB = b.is_pinned ? 1 : 0;
+          if (pinA !== pinB) return pinB - pinA;
+          
+          const isAiA = a.samvad_id === 'ai#9999' ? 1 : 0;
+          const isAiB = b.samvad_id === 'ai#9999' ? 1 : 0;
+          if (isAiA !== isAiB) return isAiB - isAiA;
+          
+          const nameA = a.username || a.name || '';
+          const nameB = b.username || b.name || '';
+          return nameA.localeCompare(nameB);
+        });
+        
+        setUsers(merged);
       } catch (err) {
-        console.error('Failed to load friends', err)
+        console.error('Failed to load chats', err);
       }
     }
-    fetchFriends()
+    fetchChats()
 
     // Socket events
     socketInstance.on('user_status_change', ({ userId, online, last_seen }) => {
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, online, last_seen } : u))
+      setUsers(prev => prev.map(u => !u.isGroup && u.id === userId ? { ...u, online, last_seen } : u))
     })
 
     socketInstance.on('receive_message', (msg) => {
-      setMessages(prev => [...prev, msg]);
+      const isFromSelected = msg.group_id 
+        ? (selectedUser && selectedUser.isGroup && Number(selectedUser.id) === Number(msg.group_id))
+        : (selectedUser && !selectedUser.isGroup && (Number(selectedUser.id) === Number(msg.sender_id) || Number(selectedUser.id) === Number(msg.receiver_id)));
+
+      if (isFromSelected) {
+        setMessages(prev => [...prev, msg]);
+      }
       
-      // Play native audio chime
       playNotificationSound();
 
-      // Trigger standard/in-app notification check
       const isAppFocused = document.hasFocus();
-      const isChattingWithSender = selectedUser && Number(selectedUser.id) === Number(msg.sender_id);
+      const isChattingWithSender = selectedUser && (
+        msg.group_id 
+          ? (selectedUser.isGroup && Number(selectedUser.id) === Number(msg.group_id))
+          : (!selectedUser.isGroup && Number(selectedUser.id) === Number(msg.sender_id))
+      );
 
       if (!isAppFocused || !isChattingWithSender) {
-        const sender = usersRef.current.find(u => Number(u.id) === Number(msg.sender_id));
-        const senderName = sender ? sender.username : 'Someone';
+        let senderName = msg.sender_name || 'Someone';
+        let notificationTitle = `New message from ${senderName}`;
+        let toastTitle = senderName;
+        let iconUrl = 'https://api.dicebear.com/7.x/bottts/svg?seed=Samvad';
+
+        if (msg.group_id) {
+          const group = usersRef.current.find(u => u.isGroup && Number(u.id) === Number(msg.group_id));
+          const groupName = group ? group.name : 'Group';
+          notificationTitle = `New message in ${groupName} from ${senderName}`;
+          toastTitle = `${groupName} • ${senderName}`;
+          if (group?.avatar) iconUrl = group.avatar;
+        } else {
+          const sender = usersRef.current.find(u => !u.isGroup && Number(u.id) === Number(msg.sender_id));
+          if (sender) {
+            senderName = sender.username;
+            if (sender.profile_pic) {
+              iconUrl = sender.profile_pic.startsWith('http') ? sender.profile_pic : `${SERVER_URL}${sender.profile_pic}`;
+            }
+          }
+        }
         
         // Native browser desktop notification
         if ('Notification' in window && Notification.permission === 'granted') {
-          const iconUrl = sender?.profile_pic 
-            ? (sender.profile_pic.startsWith('http') ? sender.profile_pic : `${SERVER_URL}${sender.profile_pic}`)
-            : 'https://api.dicebear.com/7.x/bottts/svg?seed=Samvad';
-            
-          const n = new Notification(`New message from ${senderName}`, {
+          const n = new Notification(notificationTitle, {
             body: msg.content || 'Sent a media file',
             icon: iconUrl
           });
           
           n.onclick = () => {
             window.focus();
-            if (sender) setSelectedUser(sender);
+            const activeChat = usersRef.current.find(u => 
+              msg.group_id 
+                ? (u.isGroup && Number(u.id) === Number(msg.group_id))
+                : (!u.isGroup && Number(u.id) === Number(msg.sender_id))
+            );
+            if (activeChat) setSelectedUser(activeChat);
           };
         }
 
         // In-App Toast banner
-        if (isAppFocused && sender) {
-          showInAppToast(msg, sender);
+        if (isAppFocused) {
+          const senderObj = {
+            id: msg.group_id ? msg.group_id : msg.sender_id,
+            username: toastTitle,
+            profile_pic: msg.group_id ? (usersRef.current.find(u => u.isGroup && Number(u.id) === Number(msg.group_id))?.avatar || null) : (usersRef.current.find(u => !u.isGroup && Number(u.id) === Number(msg.sender_id))?.profile_pic || null),
+            isGroup: !!msg.group_id
+          };
+          showInAppToast(msg, senderObj);
         }
       }
     })
 
     socketInstance.on('user_deleted', ({ userId }) => {
-      setUsers(prev => prev.filter(u => u.id !== userId))
-      if (selectedUser?.id === userId) {
+      setUsers(prev => prev.filter(u => u.isGroup || u.id !== userId))
+      if (selectedUser && !selectedUser.isGroup && selectedUser.id === userId) {
         setSelectedUser(null)
       }
     })
@@ -212,13 +460,57 @@ function App() {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reaction, react_user_id } : m))
     })
 
-    socketInstance.on('user_typing', ({ userId }) => {
-      setTypingUserId(userId)
+    socketInstance.on('user_typing', ({ userId, groupId, username }) => {
+      if (groupId) {
+        setGroupTyping(prev => ({
+          ...prev,
+          [groupId]: {
+            ...(prev[groupId] || {}),
+            [userId]: username
+          }
+        }));
+      } else {
+        setTypingUserId(userId)
+      }
     })
 
-    socketInstance.on('user_stopped_typing', ({ userId }) => {
-      if (typingUserId === userId) setTypingUserId(null)
+    socketInstance.on('user_stopped_typing', ({ userId, groupId }) => {
+      if (groupId) {
+        setGroupTyping(prev => {
+          const group = { ...(prev[groupId] || {}) };
+          delete group[userId];
+          return {
+            ...prev,
+            [groupId]: group
+          };
+        });
+      } else {
+        if (typingUserId === userId) setTypingUserId(null)
+      }
     })
+
+    socketInstance.on('group_created', ({ group, members }) => {
+      setUsers(prev => {
+        if (prev.some(u => u.isGroup && u.id === group.id)) return prev;
+        const updated = [group, ...prev];
+        updated.sort((a, b) => {
+          const pinA = a.is_pinned ? 1 : 0;
+          const pinB = b.is_pinned ? 1 : 0;
+          if (pinA !== pinB) return pinB - pinA;
+          
+          const isAiA = a.samvad_id === 'ai#9999' ? 1 : 0;
+          const isAiB = b.samvad_id === 'ai#9999' ? 1 : 0;
+          if (isAiA !== isAiB) return isAiB - isAiA;
+          
+          const nameA = a.username || a.name || '';
+          const nameB = b.username || b.name || '';
+          return nameA.localeCompare(nameB);
+        });
+        return updated;
+      });
+
+      socketInstance.emit('join_group', { groupId: group.id });
+    });
 
     socketInstance.on('messages_read', ({ receiver_id }) => {
       setMessages(prev => prev.map(m => m.receiver_id === receiver_id ? { ...m, status: 'read' } : m))
@@ -231,7 +523,7 @@ function App() {
     // ── Call Events ────────────────────────────────────
     socketInstance.on('incoming_call', ({ from, signal, callType }) => {
       startIncomingCallRing(); // Start looped ringtone
-      const callerUser = usersRef.current.find(u => Number(u.id) === Number(from));
+      const callerUser = usersRef.current.find(u => !u.isGroup && Number(u.id) === Number(from));
       if (!callerUser) {
         setIncomingCall({ from: Number(from), signal, callType, caller: { id: Number(from), username: 'Unknown' } });
         return;
@@ -260,6 +552,7 @@ function App() {
       socketInstance.off('message_reaction')
       socketInstance.off('user_typing')
       socketInstance.off('user_stopped_typing')
+      socketInstance.off('group_created')
       socketInstance.off('message_pinned')
       socketInstance.off('messages_read')
       socketInstance.off('incoming_call')
@@ -274,13 +567,16 @@ function App() {
     const fetchHistory = async () => {
       try {
         setHasMoreMessages(true)
-        const res = await axios.get(`${SERVER_URL}/api/messages/${currentUser.id}/${selectedUser.id}?limit=30`)
+        const endpoint = selectedUser.isGroup
+          ? `${SERVER_URL}/api/messages/group/${selectedUser.id}?limit=30`
+          : `${SERVER_URL}/api/messages/${currentUser.id}/${selectedUser.id}?limit=30`;
+        const res = await axios.get(endpoint)
         setMessages(res.data)
         if (res.data.length < 30) {
           setHasMoreMessages(false)
         }
         
-        if (socketInstance) {
+        if (socketInstance && !selectedUser.isGroup) {
           socketInstance.emit('mark_messages_read', { sender_id: selectedUser.id, receiver_id: currentUser.id })
         }
       } catch (err) {
@@ -300,9 +596,10 @@ function App() {
     }
 
     try {
-      const res = await axios.get(
-        `${SERVER_URL}/api/messages/${currentUser.id}/${selectedUser.id}?beforeId=${oldestId}&limit=30`
-      );
+      const endpoint = selectedUser.isGroup
+        ? `${SERVER_URL}/api/messages/group/${selectedUser.id}?beforeId=${oldestId}&limit=30`
+        : `${SERVER_URL}/api/messages/${currentUser.id}/${selectedUser.id}?beforeId=${oldestId}&limit=30`;
+      const res = await axios.get(endpoint);
       if (res.data.length < 30) {
         setHasMoreMessages(false);
       }
@@ -322,7 +619,6 @@ function App() {
     const correlationId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const newMsg = {
       sender_id: currentUser.id,
-      receiver_id: selectedUser.id,
       content: msgData.content,
       type: msgData.type,
       file_url: msgData.file_url,
@@ -330,18 +626,25 @@ function App() {
       is_forwarded: msgData.is_forwarded || false,
       correlationId: correlationId
     }
+
+    if (selectedUser.isGroup) {
+      newMsg.group_id = selectedUser.id;
+    } else {
+      newMsg.receiver_id = selectedUser.id;
+    }
     
     socketInstance.emit('send_message', newMsg)
-    playSentSound(); // Play Synthesized Sent Sound!
+    playSentSound();
     
     const parentInfo = replyingTo ? {
       parent_content: replyingTo.content,
-      parent_sender_name: replyingTo.sender_id === currentUser.id ? 'You' : (selectedUser.username)
+      parent_sender_name: replyingTo.sender_id === currentUser.id ? 'You' : (replyingTo.sender_name || selectedUser.username || selectedUser.name)
     } : {};
 
     setMessages(prev => [...prev, {
       ...newMsg,
       ...parentInfo,
+      sender_name: currentUser.username,
       id: Date.now(),
       timestamp: new Date().toISOString(),
       isOptimistic: true
@@ -352,15 +655,19 @@ function App() {
 
   const handleTyping = (isTyping) => {
     if (!socketInstance || !selectedUser) return;
+    const payload = selectedUser.isGroup
+      ? { group_id: selectedUser.id }
+      : { receiver_id: selectedUser.id };
+
     if (isTyping) {
       const now = Date.now();
       if (now - lastTypingEmitRef.current > 3000) {
-        socketInstance.emit('typing', { receiver_id: selectedUser.id });
+        socketInstance.emit('typing', payload);
         lastTypingEmitRef.current = now;
       }
     } else {
-      socketInstance.emit('stop_typing', { receiver_id: selectedUser.id });
-      lastTypingEmitRef.current = 0; // Reset
+      socketInstance.emit('stop_typing', payload);
+      lastTypingEmitRef.current = 0;
     }
   }
 
@@ -547,28 +854,42 @@ function App() {
           </div>
 
           <form onSubmit={handleAuth} className="input-group">
-            <div className="input-wrapper">
-              <MdPerson className="input-icon" />
-              <input 
-                type="text" 
-                className="input-field" 
-                placeholder={isLoginMode ? "Email, Username or samvadId" : "Enter Username"} 
-                value={usernameInput}
-                onChange={e => setUsernameInput(e.target.value)}
-                autoFocus
-              />
+            <div className="input-wrapper-container">
+              <div className="input-wrapper">
+                <MdPerson className="input-icon" />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder={isLoginMode ? "Email, Username or samvadId" : "Enter Username"} 
+                  value={usernameInput}
+                  onChange={e => setUsernameInput(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {!isLoginMode && usernameInput && (
+                <div className={`availability-indicator ${usernameAvailable === true ? 'available' : usernameAvailable === false ? 'taken' : 'checking'}`}>
+                  {usernameChecking ? 'Checking...' : usernameAvailable === true ? '✓ Username is available' : usernameAvailable === false ? '✗ Username is already taken' : ''}
+                </div>
+              )}
             </div>
 
             {!isLoginMode && (
-              <div className="input-wrapper">
-                <MdEmail className="input-icon" />
-                <input 
-                  type="email" 
-                  className="input-field" 
-                  placeholder="Enter Email Address" 
-                  value={emailInput}
-                  onChange={e => setEmailInput(e.target.value)}
-                />
+              <div className="input-wrapper-container">
+                <div className="input-wrapper">
+                  <MdEmail className="input-icon" />
+                  <input 
+                    type="email" 
+                    className="input-field" 
+                    placeholder="Enter Email Address" 
+                    value={emailInput}
+                    onChange={e => setEmailInput(e.target.value)}
+                  />
+                </div>
+                {emailInput && (
+                  <div className={`availability-indicator ${emailAvailable === true ? 'available' : emailAvailable === false ? 'taken' : 'checking'}`}>
+                    {emailChecking ? 'Checking...' : emailAvailable === true ? '✓ Email is available' : emailAvailable === false ? '✗ Email is taken or invalid' : ''}
+                  </div>
+                )}
               </div>
             )}
 
@@ -586,12 +907,31 @@ function App() {
               </div>
             </div>
 
+            {!isLoginMode && passwordInput && (
+              <div className="password-strength-container">
+                <div className="password-strength-bar-bg">
+                  <div 
+                    className="password-strength-bar" 
+                    style={{ 
+                      width: `${(getPasswordStrength(passwordInput).score / 4) * 100}%`, 
+                      backgroundColor: getPasswordStrength(passwordInput).color 
+                    }}
+                  ></div>
+                </div>
+                <span className="password-strength-label" style={{ color: getPasswordStrength(passwordInput).color }}>
+                  Strength: {getPasswordStrength(passwordInput).label}
+                </span>
+              </div>
+            )}
+
+            {/* Security question removed */}
+
             {isLoginMode && (
               <div className="auth-secondary">
                 <label className="checkbox-label">
                   <input type="checkbox" /> Remember me
                 </label>
-                <span className="forgot-link">Forgot Password?</span>
+                <span className="forgot-link" onClick={() => setShowForgotPassword(true)}>Forgot Password?</span>
               </div>
             )}
 
@@ -649,7 +989,9 @@ function App() {
           onForwardMessage={setForwardingMessage}
           isSidebarHidden={isSidebarHidden}
           onToggleSidebar={() => setIsSidebarHidden(!isSidebarHidden)}
-          isTyping={typingUserId === selectedUser?.id}
+          isTyping={selectedUser?.isGroup 
+            ? Object.values(groupTyping[selectedUser.id] || {}).join(', ') 
+            : (typingUserId === selectedUser?.id)}
           onViewImage={setViewingImageUrl}
           onStartCall={handleStartCall}
           hasMoreMessages={hasMoreMessages}
@@ -724,7 +1066,7 @@ function App() {
       <div className="in-app-toast-container">
         {toasts.map(t => (
           <div key={t.id} className="in-app-toast" onClick={() => {
-            const senderUser = users.find(u => Number(u.id) === Number(t.senderId));
+            const senderUser = users.find(u => Number(u.id) === Number(t.senderId) && !!u.isGroup === !!t.isGroup);
             if (senderUser) setSelectedUser(senderUser);
             setToasts(prev => prev.filter(toast => toast.id !== t.id));
           }}>
@@ -743,6 +1085,80 @@ function App() {
           </div>
         ))}
       </div>
+
+      {showForgotPassword && (
+        <div className="forgot-password-overlay" onClick={() => setShowForgotPassword(false)}>
+          <div className="forgot-password-modal" onClick={e => e.stopPropagation()}>
+            <div className="forgot-header">
+              <h2>Reset Password</h2>
+              <p>Verify details and solve the character CAPTCHA to reset password.</p>
+              <button className="forgot-close-btn" onClick={() => setShowForgotPassword(false)}>&times;</button>
+            </div>
+            
+            <form onSubmit={handleForgotPasswordReset} className="forgot-form">
+              {forgotError && <div className="forgot-error-banner">{forgotError}</div>}
+              {forgotSuccess && <div className="forgot-success-banner">{forgotSuccess}</div>}
+
+              <div className="input-wrapper">
+                <MdPerson className="input-icon" />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Username, Email, or samvadId"
+                  value={forgotIdentifier}
+                  onChange={e => setForgotIdentifier(e.target.value)}
+                  required
+                />
+              </div>
+
+              {/* Security question answer fields removed */}
+
+              <div className="captcha-section">
+                {renderCaptchaDisplay()}
+                <div className="input-wrapper captcha-input-wrapper">
+                  <MdRefresh className="captcha-refresh-icon" onClick={generateCaptcha} title="Refresh CAPTCHA" />
+                  <input 
+                    type="text" 
+                    className="input-field captcha-input" 
+                    placeholder="Enter CAPTCHA Code"
+                    value={captchaInput}
+                    onChange={e => setCaptchaInput(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="input-wrapper">
+                <MdLock className="input-icon" />
+                <input 
+                  type="password" 
+                  className="input-field" 
+                  placeholder="New Password (min 8 chars)"
+                  value={forgotNewPassword}
+                  onChange={e => setForgotNewPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="input-wrapper">
+                <MdLock className="input-icon" />
+                <input 
+                  type="password" 
+                  className="input-field" 
+                  placeholder="Confirm New Password"
+                  value={forgotConfirmPassword}
+                  onChange={e => setForgotConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="primary-btn reset-btn">
+                Reset Password
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

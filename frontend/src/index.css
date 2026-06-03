@@ -2949,4 +2949,533 @@ body {
   border-left: 4px solid #a855f7;
 }
 
+/* SignUp & Onboarding Security Enhancements Styles */
+
+.input-wrapper-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative;
+  gap: 4px;
+}
+
+/* Availability indicator check/cross */
+.availability-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+  margin-top: -2px;
+  margin-bottom: 4px;
+  animation: slideDownIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.availability-indicator.available {
+  color: #22c55e; /* Green */
+}
+
+.availability-indicator.taken {
+  color: #ef4444; /* Red */
+  animation: shakeX 0.4s ease;
+}
+
+.availability-indicator.checking {
+  color: var(--signal-text-muted);
+}
+
+/* Password Strength Indicator */
+.password-strength-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 6px;
+  margin: 4px 0 8px 0;
+  animation: fadeIn 0.3s ease;
+}
+
+.password-strength-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.password-strength-bar {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+}
+
+.password-strength-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Dropdown styling */
+.select-wrapper {
+  position: relative;
+}
+
+.select-field {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.9rem 1rem 0.9rem 2.8rem !important;
+  font-size: 0.95rem;
+  outline: none;
+  cursor: pointer;
+  appearance: none; /* remove default arrow */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1.2rem;
+  transition: all 0.2s ease;
+}
+
+.select-field:focus {
+  border-color: var(--brand-violet);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.select-field option {
+  background: #181822;
+  color: white;
+}
+
+/* Forgot Password Modal */
+.forgot-password-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.25s ease;
+}
+
+.forgot-password-modal {
+  width: 100%;
+  max-width: 450px;
+  background: rgba(30, 30, 45, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  padding: 2rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  position: relative;
+  overflow: hidden;
+  animation: modalScaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.forgot-header {
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.forgot-header h2 {
+  font-size: 1.5rem;
+  color: white;
+  margin: 0 0 0.5rem 0;
+  font-weight: 700;
+}
+
+.forgot-header p {
+  font-size: 0.85rem;
+  color: var(--signal-text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.forgot-close-btn {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--signal-text-muted);
+  font-size: 1.8rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.forgot-close-btn:hover {
+  color: white;
+}
+
+.forgot-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.forgot-error-banner {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  animation: shakeX 0.4s ease;
+}
+
+.forgot-success-banner {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #86efac;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  animation: slideDownIn 0.3s ease;
+}
+
+/* Captcha section style */
+.captcha-section {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.captcha-display-box {
+  flex: 1;
+  background: linear-gradient(135deg, #13131a 0%, #1c1c2b 100%);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+  transition: border-color 0.2s;
+}
+
+.captcha-display-box:hover {
+  border-color: var(--brand-violet);
+}
+
+.captcha-noise-line-1 {
+  position: absolute;
+  top: 30%;
+  left: -10%;
+  width: 120%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  transform: rotate(5deg);
+  pointer-events: none;
+}
+
+.captcha-noise-line-2 {
+  position: absolute;
+  top: 60%;
+  left: -10%;
+  width: 120%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  transform: rotate(-7deg);
+  pointer-events: none;
+}
+
+.captcha-input-wrapper {
+  flex: 1.2;
+}
+
+.captcha-input {
+  letter-spacing: 2px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.captcha-refresh-icon {
+  position: absolute;
+  right: 12px;
+  color: var(--signal-text-muted);
+  cursor: pointer;
+  transition: transform 0.3s ease, color 0.2s;
+}
+
+.captcha-refresh-icon:hover {
+  color: white;
+  transform: rotate(180deg);
+}
+
+/* Animations */
+@keyframes slideDownIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes modalScaleUp {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+/* Advanced Hover states on inputs */
+.input-wrapper {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.input-wrapper:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--brand-violet);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(139, 92, 246, 0.2);
+}
+
+.forgot-link:hover {
+  text-decoration: underline;
+  filter: brightness(1.2);
+  transform: scale(1.02);
+  display: inline-block;
+  transition: all 0.15s ease;
+}
+
+/* Voice Notes Styles */
+
+.recording-panel-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  height: 48px;
+  padding: 0 8px;
+  animation: slideDownIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.blinking-red-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #ff4b4b;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #ff4b4b;
+  animation: pulseRecording 1s infinite alternate;
+}
+
+.recording-timer {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ff4b4b;
+  font-family: monospace;
+}
+
+.visualizer-container {
+  flex: 1;
+  margin: 0 16px;
+  height: 32px;
+  background-color: #1e1e2d;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glowing-waveform-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cancel-recording-btn {
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.cancel-recording-btn:hover {
+  color: #ef4444;
+  transform: scale(1.15);
+}
+
+/* Voice Note Bubble & Card Player */
+.voice-note-player-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  min-width: 250px;
+  max-width: 320px;
+  position: relative;
+  user-select: none;
+}
+
+.voice-note-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.voice-note-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.voice-note-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.voice-note-play-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.voice-note-play-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.08);
+}
+
+.voice-note-waveform-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 4px;
+  position: relative;
+}
+
+.voice-note-wave-visual {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 0 4px;
+}
+
+.voice-note-wave-bar {
+  width: 3px;
+  border-radius: 1.5px;
+  min-height: 2px;
+  transition: background-color 0.15s ease;
+}
+
+/* Contrast highlighted played tracks */
+.sent .voice-note-wave-bar.played {
+  background-color: #ffffff !important;
+}
+
+.received .voice-note-wave-bar.played {
+  background-color: #a78bfa !important; /* light violet */
+}
+
+/* Scrubbing Range Slider Overlaid Invisibly */
+.voice-note-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 36px;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  z-index: 5;
+}
+
+.voice-note-time-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-family: monospace;
+}
+
+.sent .voice-note-time-info {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.received .voice-note-time-info {
+  color: var(--signal-text-muted);
+}
+
+/* Pulsing red mic animation */
+@keyframes pulseRecording {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
 

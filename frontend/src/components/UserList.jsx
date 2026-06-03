@@ -1,6 +1,6 @@
 import React from 'react'
 import axios from 'axios'
-import { MdSearch, MdOutlineCameraAlt, MdOutlineEdit, MdDoneAll, MdMoreVert, MdLogout, MdDeleteSweep, MdPushPin, MdOutlinePushPin } from 'react-icons/md'
+import { MdSearch, MdOutlineCameraAlt, MdOutlineEdit, MdDoneAll, MdMoreVert, MdLogout, MdDeleteSweep, MdPushPin, MdOutlinePushPin, MdGroupAdd, MdGroup } from 'react-icons/md'
 
 const AVATAR_COLORS = [
   '#4e5149', '#963d1e', '#593c66', '#2e4a66', 
@@ -17,6 +17,59 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
   const [isSearching, setIsSearching] = React.useState(false);
   const cameraInputRef = React.useRef(null);
   const profilePicInputRef = React.useRef(null);
+
+  // Group creation states
+  const [showCreateGroupModal, setShowCreateGroupModal] = React.useState(false);
+  const [groupName, setGroupName] = React.useState('');
+  const [selectedGroupMembers, setSelectedGroupMembers] = React.useState([]);
+  const [groupAvatarFile, setGroupAvatarFile] = React.useState(null);
+  const groupAvatarInputRef = React.useRef(null);
+
+  const toggleMemberSelection = (userId) => {
+    setSelectedGroupMembers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId) 
+        : [...prev, userId]
+    );
+  };
+
+  const handleCreateGroupSubmit = async (e) => {
+    e.preventDefault();
+    if (!groupName.trim()) {
+      alert('Please enter a group name');
+      return;
+    }
+    if (selectedGroupMembers.length === 0) {
+      alert('Please select at least one member to invite');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('name', groupName.trim());
+    formData.append('members', JSON.stringify(selectedGroupMembers));
+    if (groupAvatarFile) {
+      formData.append('avatar', groupAvatarFile);
+    }
+
+    try {
+      // Import axios dynamically if needed, but we already import it.
+      const res = await (require('axios').default || require('axios')).post(`${serverUrl}/api/groups`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setShowCreateGroupModal(false);
+      setGroupName('');
+      setSelectedGroupMembers([]);
+      setGroupAvatarFile(null);
+      
+      if (onSelectUser) {
+        onSelectUser(res.data);
+      }
+      alert(`Group "${res.data.name}" created successfully!`);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to create group');
+    }
+  };
 
   const handleSearch = async (e) => {
     if (e.key === 'Enter' && searchId.trim()) {
@@ -112,6 +165,9 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
                 }} 
               />
               <div className="header-dropdown" style={{ left: 'auto', right: 0, zIndex: 999 }}>
+                <div className="dropdown-item" onClick={() => { setShowCreateGroupModal(true); setShowSettings(false); }}>
+                  <MdGroupAdd /> Create Group
+                </div>
                 <div className="dropdown-item" onClick={() => { setShowProfileModal(true); setShowSettings(false); }}>
                   <MdOutlineEdit /> Edit Profile
                 </div>
@@ -168,64 +224,82 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
         ) : (
           users.map(user => (
             <div 
-              key={user.id} 
-              className={`user-item ${selectedUser?.id === user.id ? 'active' : ''}`}
+              key={user.isGroup ? `group-${user.id}` : `user-${user.id}`} 
+              className={`user-item ${selectedUser?.id === user.id && !!selectedUser?.isGroup === !!user.isGroup ? 'active' : ''}`}
               onClick={() => onSelectUser(user)}
             >
               <div className="user-avatar" 
                 style={{ background: getAvatarColor(user.id), cursor: 'pointer' }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (user.profile_pic) onViewImage(user.profile_pic.startsWith('http') ? user.profile_pic : `${serverUrl}${user.profile_pic}`);
-                  else onSelectUser(user);
+                  if (user.isGroup) {
+                    if (user.avatar) onViewImage(user.avatar);
+                    else onSelectUser(user);
+                  } else {
+                    if (user.profile_pic) onViewImage(user.profile_pic.startsWith('http') ? user.profile_pic : `${serverUrl}${user.profile_pic}`);
+                    else onSelectUser(user);
+                  }
                 }}
               >
-                {user.profile_pic ? (
-                  <img src={user.profile_pic.startsWith('http') ? user.profile_pic : `${serverUrl}${user.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                {user.isGroup ? (
+                  user.avatar ? (
+                    <img src={user.avatar} alt="grp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                  )
                 ) : (
-                  user.username.charAt(0).toUpperCase()
+                  user.profile_pic ? (
+                    <img src={user.profile_pic.startsWith('http') ? user.profile_pic : `${serverUrl}${user.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    user.username.charAt(0).toUpperCase()
+                  )
                 )}
-                <span className={`status-indicator ${user.online ? 'online' : 'offline'}`}></span>
+                {!user.isGroup && <span className={`status-indicator ${user.online ? 'online' : 'offline'}`}></span>}
               </div>
               <div className="user-info">
                 <div className="user-info-top">
                   <h4 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {user.username}
+                    {user.isGroup ? user.name : user.username}
                     {user.samvad_id === 'ai#9999' && <span className="ai-bot-pill-badge">AI BOT</span>}
+                    {user.isGroup && <span className="ai-bot-pill-badge" style={{ backgroundColor: 'var(--brand-violet)' }}>GROUP</span>}
                   </h4>
                   <span className="time-snippet" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {!!user.is_pinned && <MdPushPin size={14} style={{ color: '#a855f7', transform: 'rotate(45deg)' }} />}
-                    {user.samvad_id === 'ai#9999' ? 'Active 24/7' : (user.online ? 'Online' : new Date(user.last_seen).toLocaleDateString())}
+                    {!user.isGroup && !!user.is_pinned && <MdPushPin size={14} style={{ color: '#a855f7', transform: 'rotate(45deg)' }} />}
+                    {user.isGroup ? 'Group Chat' : (user.samvad_id === 'ai#9999' ? 'Active 24/7' : (user.online ? 'Online' : new Date(user.last_seen).toLocaleDateString()))}
                   </span>
                 </div>
                 <div className="user-info-bottom">
-                  <p>{user.about || 'Available'}</p>
+                  <p>{user.isGroup ? `${user.members?.length || 0} members` : (user.about || 'Available')}</p>
                 </div>
               </div>
-              <div className="user-list-actions-wrapper" style={{ display: 'flex', gap: '8px', marginLeft: 'auto', paddingLeft: '8px' }}>
-                <div 
-                  className="user-pin-action"
-                  title={user.is_pinned ? "Unpin Chat" : "Pin Chat"}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onTogglePinChat) onTogglePinChat(user.id, !user.is_pinned);
-                  }}
-                >
-                  {user.is_pinned ? <MdPushPin size={18} /> : <MdOutlinePushPin size={18} />}
-                </div>
-                {user.samvad_id !== 'ai#9999' && (
+              {!user.isGroup && (
+                <div className="user-list-actions-wrapper" style={{ display: 'flex', gap: '8px', marginLeft: 'auto', paddingLeft: '8px' }}>
                   <div 
-                     className="user-delete-action" 
-                     title="Delete this account"
-                     onClick={(e) => {
-                       e.stopPropagation();
-                       onDeleteSpecificUser(user.id, user.username);
-                     }}
+                    className="user-pin-action"
+                    title={user.is_pinned ? "Unpin Chat" : "Pin Chat"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onTogglePinChat) onTogglePinChat(user.id, !user.is_pinned);
+                    }}
                   >
-                    <MdDeleteSweep size={20} />
+                    {user.is_pinned ? <MdPushPin size={18} /> : <MdOutlinePushPin size={18} />}
                   </div>
-                )}
-              </div>
+                  {user.samvad_id !== 'ai#9999' && (
+                    <div 
+                       className="user-delete-action" 
+                       title="Delete this account"
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         onDeleteSpecificUser(user.id, user.username);
+                       }}
+                    >
+                      <MdDeleteSweep size={20} />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}
@@ -288,6 +362,81 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
               <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                 <button type="submit" className="primary-btn" style={{ flex: 1, padding: '10px' }}>Save</button>
                 <button type="button" className="cancel-btn" onClick={() => setShowProfileModal(false)} style={{ flex: 1 }}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showCreateGroupModal && (
+        <div className="forward-modal-overlay" onClick={() => setShowCreateGroupModal(false)}>
+          <div className="forward-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <h3>Create Group</h3>
+            <form onSubmit={handleCreateGroupSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '15px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <div className="user-avatar" style={{ width: '60px', height: '60px', fontSize: '1.5rem', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {groupAvatarFile ? (
+                    <img src={URL.createObjectURL(groupAvatarFile)} alt="grp preview" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <MdGroup size={30} color="#888" />
+                  )}
+                </div>
+                <button type="button" className="secondary-btn" onClick={() => groupAvatarInputRef.current.click()} style={{ padding: '8px 12px', fontSize: '0.9rem' }}>
+                  Choose Group Avatar
+                </button>
+                <input 
+                  type="file" 
+                  className="hidden-input" 
+                  ref={groupAvatarInputRef}
+                  onChange={e => setGroupAvatarFile(e.target.files[0])}
+                  accept="image/*"
+                />
+              </div>
+              <div className="input-wrapper" style={{ border: '1px solid #333' }}>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Group Name" 
+                  value={groupName}
+                  onChange={e => setGroupName(e.target.value)}
+                  required
+                />
+              </div>
+              
+              <div style={{ marginTop: '10px' }}>
+                <label style={{ fontSize: '0.9rem', color: '#aaa', marginBottom: '8px', display: 'block' }}>Select Members to Invite:</label>
+                <div className="invite-members-list" style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid #222', borderRadius: '8px', padding: '10px', background: '#111' }}>
+                  {users.filter(u => !u.isGroup && u.samvad_id !== 'ai#9999').length === 0 ? (
+                    <p style={{ fontSize: '0.85rem', color: '#666', textAlign: 'center', padding: '10px 0' }}>No friends to invite. Connect with users first.</p>
+                  ) : (
+                    users.filter(u => !u.isGroup && u.samvad_id !== 'ai#9999').map(u => (
+                      <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px', borderRadius: '6px', background: selectedGroupMembers.includes(u.id) ? 'rgba(168, 85, 247, 0.15)' : 'transparent', transition: 'all 0.2s' }}>
+                        <input 
+                          type="checkbox" 
+                          id={`member-${u.id}`}
+                          checked={selectedGroupMembers.includes(u.id)}
+                          onChange={() => toggleMemberSelection(u.id)}
+                          style={{ accentColor: 'var(--brand-violet)', width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor={`member-${u.id}`} style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', cursor: 'pointer' }}>
+                          <div className="user-avatar" style={{ width: '28px', height: '28px', fontSize: '0.8rem', background: getAvatarColor(u.id) }}>
+                            {u.profile_pic ? (
+                              <img src={u.profile_pic.startsWith('http') ? u.profile_pic : `${serverUrl}${u.profile_pic}`} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                            ) : (
+                              u.username.charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <span style={{ fontSize: '0.9rem', color: '#eee' }}>{u.username}</span>
+                        </label>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                <button type="submit" className="primary-btn" style={{ flex: 1, padding: '10px', background: 'var(--brand-violet)', border: 'none' }}>Create Group</button>
+                <button type="button" className="cancel-btn" onClick={() => setShowCreateGroupModal(false)} style={{ flex: 1 }}>Cancel</button>
               </div>
             </form>
           </div>

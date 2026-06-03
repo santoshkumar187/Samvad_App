@@ -1,9 +1,213 @@
 const axios = require('axios');
+const OpenAI = require('openai');
 
+// ── Triple-Provider Configuration ────────────────────────────────────
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const AI_BEARER_TOKEN = process.env.AI_BEARER_TOKEN || '';
-const AI_API_URL = process.env.AI_API_URL || 'https://api.openai.com/v1/chat/completions';
-const AI_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+const XAI_API_KEY = process.env.XAI_API_KEY || process.env.AI_BEARER_TOKEN || '';
+const XAI_API_URL = process.env.AI_API_URL || 'https://api.x.ai/v1/chat/completions';
+const XAI_TTS_API_URL = process.env.XAI_TTS_API_URL || 'https://api.x.ai/v1/tts';
+const XAI_MODEL = process.env.AI_MODEL || 'grok-3-mini';
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const GEMINI_MODEL = 'gemini-2.0-flash';
+const HF_TOKEN = process.env.HF_TOKEN || '';
+const HF_MODEL = 'meta-llama/Llama-3.3-70B-Instruct';
+
+function getXAIAuthHeader() {
+  return XAI_API_KEY.trim().startsWith('Bearer ')
+    ? XAI_API_KEY.trim()
+    : `Bearer ${XAI_API_KEY.trim()}`;
+}
+
+/**
+ * Call xAI (Grok) API using OpenAI SDK's responses.create with grok-4.3
+ */
+async function callXAI(prompt, systemInstruction = '') {
+  if (!XAI_API_KEY || XAI_API_KEY === 'REPLACE_WITH_XAI_API_KEY') throw new Error('NO_XAI_KEY');
+
+  const client = new OpenAI({
+    apiKey: XAI_API_KEY,
+    baseURL: "https://api.x.ai/v1",
+  });
+
+  const fullInput = systemInstruction ? `${systemInstruction}\n\n${prompt}` : prompt;
+
+  const response = await client.responses.create({
+    model: "grok-4.3",
+    max_output_tokens: 1000000,
+    reasoning: { "effort": "high" },
+    tools: [{ "type": "web_search" }, { "type": "x_search" }],
+    stream: true,
+    input: fullInput,
+  });
+
+  let accumulatedText = "";
+  for await (const event of response) {
+    const delta = event.delta ?? "";
+    process.stdout.write(delta);
+    accumulatedText += delta;
+  }
+
+  if (accumulatedText) {
+    return accumulatedText.trim();
+  }
+  throw new Error('INVALID_XAI_RESPONSE');
+}
+
+async function synthesizeSpeech(text, voiceId = 'eve', language = 'en') {
+  if (!XAI_API_KEY) throw new Error('NO_XAI_KEY');
+
+  const cleanText = String(text || '').trim();
+  if (!cleanText) throw new Error('EMPTY_TTS_TEXT');
+
+  const response = await axios.post(
+    XAI_TTS_API_URL,
+    {
+      text: cleanText.slice(0, 4000),
+      voice_id: voiceId,
+      language
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': getXAIAuthHeader()
+      },
+      responseType: 'arraybuffer',
+      timeout: 30000
+    }
+  );
+
+  return Buffer.from(response.data);
+}
+
+/**
+ * Call Groq API — OpenAI-compatible format (free tier, fast inference)
+ */
+async function callGroq(prompt, systemInstruction = '') {
+  if (!GROQ_API_KEY) throw new Error('NO_GROQ_KEY');
+
+  const payload = { model: GROQ_MODEL, messages: [] };
+  if (systemInstruction) payload.messages.push({ role: 'system', content: systemInstruction });
+  payload.messages.push({ role: 'user', content: prompt });
+
+  const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', payload, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${GROQ_API_KEY.trim()}`
+    },
+    timeout: 15000
+  });
+
+  if (response.data?.choices?.[0]?.message?.content) {
+    return response.data.choices[0].message.content.trim();
+  }
+  throw new Error('INVALID_GROQ_RESPONSE');
+}
+
+/**
+ * Call Google Gemini API
+ */
+async function callGemini(prompt, systemInstruction = '') {
+  if (!GEMINI_API_KEY) throw new Error('NO_GEMINI_KEY');
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }]
+  };
+  if (systemInstruction) {
+    payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+  }
+
+  const response = await axios.post(url, payload, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 15000
+  });
+
+  if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+    return response.data.candidates[0].content.parts[0].text.trim();
+  }
+  throw new Error('INVALID_GEMINI_RESPONSE');
+}
+
+/**
+ * Call Hugging Face Router API (OpenAI-compatible serverless endpoints)
+ */
+async function callHuggingFace(prompt, systemInstruction = '') {
+  if (!HF_TOKEN) throw new Error('NO_HF_TOKEN');
+
+  const payload = {
+    model: HF_MODEL,
+    messages: []
+  };
+  if (systemInstruction) payload.messages.push({ role: 'system', content: systemInstruction });
+  payload.messages.push({ role: 'user', content: prompt });
+
+  const response = await axios.post('https://router.huggingface.co/v1/chat/completions', payload, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${HF_TOKEN.trim()}`
+    },
+    timeout: 20000
+  });
+
+  if (response.data?.choices?.[0]?.message?.content) {
+    return response.data.choices[0].message.content.trim();
+  }
+  throw new Error('INVALID_HF_RESPONSE');
+}
+
+/**
+ * Unified AI caller — xAI → Hugging Face → Groq → Gemini → local fallback.
+ * Logs which provider answered so you can monitor in the console.
+ */
+async function callAI(prompt, systemInstruction = '') {
+  // 1. Try xAI (Grok) first
+  if (XAI_API_KEY && XAI_API_KEY !== 'REPLACE_WITH_XAI_API_KEY') {
+    try {
+      const result = await callXAI(prompt, systemInstruction);
+      console.log('[AI] ✅ Response from xAI (Grok)');
+      return result;
+    } catch (err) {
+      console.warn('[AI] ⚠️ xAI failed:', err.response?.data?.error || err.response?.data?.code || err.message);
+    }
+  }
+
+  // 2. Try Hugging Face
+  if (HF_TOKEN) {
+    try {
+      const result = await callHuggingFace(prompt, systemInstruction);
+      console.log('[AI] ✅ Response from Hugging Face (Llama)');
+      return result;
+    } catch (err) {
+      console.warn('[AI] ⚠️ Hugging Face failed:', err.response?.data?.error || err.message);
+    }
+  }
+
+  // 3. Try Groq (free, fast)
+  if (GROQ_API_KEY) {
+    try {
+      const result = await callGroq(prompt, systemInstruction);
+      console.log('[AI] ✅ Response from Groq (Llama)');
+      return result;
+    } catch (err) {
+      console.warn('[AI] ⚠️ Groq failed:', err.response?.data?.error?.message || err.message);
+    }
+  }
+
+  // 4. Fallback to Gemini
+  if (GEMINI_API_KEY) {
+    try {
+      const result = await callGemini(prompt, systemInstruction);
+      console.log('[AI] ✅ Response from Gemini');
+      return result;
+    } catch (err) {
+      console.warn('[AI] ⚠️ Gemini failed:', err.response?.data?.error?.message || err.message);
+    }
+  }
+
+  // All providers failed
+  throw new Error('ALL_PROVIDERS_FAILED');
+}
 
 const countryCapitals = {
   "austria": "Vienna",
@@ -192,76 +396,13 @@ const countryCapitals = {
   "zimbabwe": "Harare"
 };
 
-/**
- * Helper to call AI (Gemini or OpenAI-compatible Bearer Token providers)
- */
-async function callAI(prompt, systemInstruction = '') {
-  // If a Bearer token is configured, use OpenAI-compatible completions format
-  if (AI_BEARER_TOKEN) {
-    const payload = {
-      model: AI_MODEL,
-      messages: []
-    };
-    
-    if (systemInstruction) {
-      payload.messages.push({ role: 'system', content: systemInstruction });
-    }
-    payload.messages.push({ role: 'user', content: prompt });
+const stateGovernors = {
+  "tamilnadu": "Rajendra Vishwanath Arlekar",
+  "tamil nadu": "Rajendra Vishwanath Arlekar"
+};
 
-    const authHeader = AI_BEARER_TOKEN.trim().startsWith('Bearer ')
-      ? AI_BEARER_TOKEN.trim()
-      : `Bearer ${AI_BEARER_TOKEN.trim()}`;
 
-    const response = await axios.post(AI_API_URL, payload, {
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': authHeader
-      },
-      timeout: 15000
-    });
 
-    if (response.data?.choices?.[0]?.message?.content) {
-      return response.data.choices[0].message.content.trim();
-    }
-    throw new Error('INVALID_OPENAI_RESPONSE');
-  }
-
-  // Default to Gemini API
-  if (!GEMINI_API_KEY) {
-    throw new Error('NO_API_KEY');
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-  
-  const payload = {
-    contents: [
-      {
-        parts: [
-          { text: prompt }
-        ]
-      }
-    ]
-  };
-
-  if (systemInstruction) {
-    payload.systemInstruction = {
-      parts: [
-        { text: systemInstruction }
-      ]
-    };
-  }
-
-  const response = await axios.post(url, payload, {
-    headers: { 'Content-Type': 'application/json' },
-    timeout: 10000
-  });
-
-  if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-    return response.data.candidates[0].content.parts[0].text.trim();
-  }
-
-  throw new Error('INVALID_RESPONSE');
-}
 
 /**
  * AI Assistant Response (ai#9999)
@@ -406,8 +547,23 @@ function getFallbackAssistantReply(msg, hasApiKey = false) {
     }
   }
 
+  if (query.includes("governor of")) {
+    const governorMatch = query.match(/governor of\s+([a-z\s\-]+)/);
+    if (governorMatch) {
+      const state = governorMatch[1].trim();
+      const normalizedState = state.replace(/\s+/g, ' ');
+      const compactState = normalizedState.replace(/\s+/g, '');
+      const governor = stateGovernors[normalizedState] || stateGovernors[compactState];
+      if (governor) {
+        return `The Governor of **Tamil Nadu** is **${governor}**.\n\nHe assumed office on **12 March 2026**.`;
+      }
+    }
+  }
+
   // 2. Comprehensive GK and Facts Dictionary
   const gkFacts = {
+    "governor of tamilnadu": "The Governor of **Tamil Nadu** is **Rajendra Vishwanath Arlekar**.\n\nHe assumed office on **12 March 2026**.",
+    "governor of tamil nadu": "The Governor of **Tamil Nadu** is **Rajendra Vishwanath Arlekar**.\n\nHe assumed office on **12 March 2026**.",
     "father of java": "*James Gosling* is known as the \"Father of Java\".\n\nHe led the team at Sun Microsystems that created Java in the mid-1990s.",
     "james gosling": "*James Gosling* is known as the \"Father of Java\".\n\nHe led the team at Sun Microsystems that created Java in the mid-1990s.",
     "capital of india": "The capital of **India** is **New Delhi**. It was officially inaugurated as the capital in 1931! 🇮🇳",
@@ -564,5 +720,6 @@ module.exports = {
   getAssistantReply,
   getSmartSuggestions,
   translateText,
-  summarizeConversation
+  summarizeConversation,
+  synthesizeSpeech
 };

@@ -94,6 +94,17 @@ async function initDB() {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pinned_chats (
+        user_id INT,
+        pinned_user_id INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, pinned_user_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (pinned_user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
     console.log('Database tables initialized successfully.');
 
     // Migration checks

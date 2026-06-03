@@ -4,7 +4,8 @@ import {
   MdChat, MdVideocam, MdCall, MdMoreVert, MdArrowBack, MdDoneAll, MdCheck,
   MdDeleteOutline, MdReply, MdForward, MdContentCopy, MdCheckCircleOutline, 
   MdInfoOutline, MdPushPin, MdFullscreen, MdFullscreenExit, MdInsertDriveFile,
-  MdPalette, MdPhotoLibrary, MdClose, MdSearch, MdTranslate
+  MdPalette, MdPhotoLibrary, MdClose, MdSearch, MdTranslate, MdVolumeUp,
+  MdPictureAsPdf, MdDescription, MdSlideshow, MdTableChart, MdArchive
 } from 'react-icons/md'
 
 export default function ChatWindow({ 
@@ -44,6 +45,7 @@ export default function ChatWindow({
   const [summaryText, setSummaryText] = useState('');
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [showTranslateLanguageSelect, setShowTranslateLanguageSelect] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState(null);
 
   // Fetch AI Smart Reply suggestions
   useEffect(() => {
@@ -97,6 +99,36 @@ export default function ChatWindow({
       alert('Failed to translate message.');
     } finally {
       setTranslatingMessageId(null);
+    }
+  };
+
+  const handleSpeakMessage = async () => {
+    if (!activeMessageMenu?.content) return;
+
+    const msg = activeMessageMenu;
+    setActiveMessageMenu(null);
+    setSpeakingMessageId(msg.id);
+
+    try {
+      const res = await axios.post(
+        `${serverUrl}/api/ai/tts`,
+        {
+          text: msg.content,
+          voiceId: 'eve',
+          language: 'en'
+        },
+        { responseType: 'blob' }
+      );
+      const audioUrl = URL.createObjectURL(res.data);
+      const audio = new Audio(audioUrl);
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
+      audio.onerror = () => URL.revokeObjectURL(audioUrl);
+      await audio.play();
+    } catch (err) {
+      console.error('Failed to speak message:', err);
+      alert('Failed to generate speech.');
+    } finally {
+      setSpeakingMessageId(null);
     }
   };
 
@@ -301,6 +333,50 @@ export default function ChatWindow({
     });
   };
 
+  const getFileCardDetails = (fileName) => {
+    const lower = String(fileName || '').toLowerCase();
+    if (lower.endsWith('.pdf')) {
+      return {
+        icon: <MdPictureAsPdf style={{ color: '#ef4444' }} />,
+        tag: 'PDF Document',
+        className: 'file-pdf'
+      };
+    }
+    if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
+      return {
+        icon: <MdSlideshow style={{ color: '#f97316' }} />,
+        tag: 'PowerPoint Presentation',
+        className: 'file-ppt'
+      };
+    }
+    if (lower.endsWith('.doc') || lower.endsWith('.docx')) {
+      return {
+        icon: <MdDescription style={{ color: '#3b82f6' }} />,
+        tag: 'Word Document',
+        className: 'file-word'
+      };
+    }
+    if (lower.endsWith('.xls') || lower.endsWith('.xlsx') || lower.endsWith('.csv')) {
+      return {
+        icon: <MdTableChart style={{ color: '#22c55e' }} />,
+        tag: 'Spreadsheet',
+        className: 'file-excel'
+      };
+    }
+    if (lower.endsWith('.zip') || lower.endsWith('.rar') || lower.endsWith('.tar') || lower.endsWith('.gz')) {
+      return {
+        icon: <MdArchive style={{ color: '#eab308' }} />,
+        tag: 'Compressed Archive',
+        className: 'file-archive'
+      };
+    }
+    return {
+      icon: <MdInsertDriveFile style={{ color: '#a855f7' }} />,
+      tag: 'File',
+      className: 'file-generic'
+    };
+  };
+
   const renderMessageContent = (msg) => {
     switch (msg.type) {
       case 'image':
@@ -321,20 +397,28 @@ export default function ChatWindow({
       case 'audio':
         return <audio src={msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`} controls className="message-audio" />
       case 'file':
+        const fileDetails = getFileCardDetails(msg.content);
         return (
           <div 
-            className="file-message-card" 
+            className={`file-message-card ${fileDetails.className}`}
             onClick={(e) => {
               e.stopPropagation();
               const src = msg.file_url?.startsWith('http') ? msg.file_url : `${serverUrl}${msg.file_url}`;
               const fileName = msg.content || '';
               const combinedStr = `${fileName} ${src}`.toLowerCase();
               const isPdf = combinedStr.includes('.pdf');
-              const isOffice = combinedStr.match(/\\.(doc|docx|ppt|pptx|xls|xlsx)/);
-              const isText = combinedStr.match(/\\.(txt|csv|json|md)/);
+              const isOffice = combinedStr.match(/\.(doc|docx|ppt|pptx|xls|xlsx)/);
+              const isText = combinedStr.match(/\.(txt|csv|json|md)/);
               
               if (isPdf) {
-                setPreviewFile({ url: `https://docs.google.com/viewer?url=${encodeURIComponent(src)}&embedded=true`, name: fileName, type: 'iframe' });
+                const isCloudinary = src.includes('cloudinary.com');
+                if (isCloudinary) {
+                  window.open(`${serverUrl}/api/view-pdf?url=${encodeURIComponent(src)}`, '_blank');
+                } else {
+                  window.open(src, '_blank');
+                }
+              } else if (isOffice) {
+                window.open(`https://docs.google.com/viewer?url=${encodeURIComponent(src)}`, '_blank');
               } else if (isText) {
                 // Fetch text content directly to preview it
                 setPreviewFile({ url: src, name: fileName, type: 'text' });
@@ -342,19 +426,20 @@ export default function ChatWindow({
                 axios.get(src)
                   .then(res => setPreviewTextContent(typeof res.data === 'object' ? JSON.stringify(res.data, null, 2) : String(res.data)))
                   .catch(err => setPreviewTextContent('Failed to load text content.'));
-              } else if (isOffice) {
-                window.open(`https://docs.google.com/viewer?url=${encodeURIComponent(src)}`, '_blank');
               } else {
                 window.open(src, '_blank');
               }
             }}
           >
             <div className="file-icon">
-              <MdInsertDriveFile />
+              {fileDetails.icon}
             </div>
             <div className="file-info">
               <span className="file-name">{msg.content}</span>
-              <span className="file-size-tap">Tap to open</span>
+              <span className="file-tag">{fileDetails.tag}</span>
+              <span className="file-size-tap">
+                {msg.content?.toLowerCase().match(/\.(txt|csv|json|md)$/) ? 'Tap to preview' : 'Tap to open'}
+              </span>
             </div>
           </div>
         )
@@ -644,6 +729,12 @@ export default function ChatWindow({
                   </div>
                 )}
 
+                {speakingMessageId === msg.id && (
+                  <div className="ai-translation-loader">
+                    <span className="translating-spinner"></span> Speaking...
+                  </div>
+                )}
+
                 {messageTranslations[msg.id] && (
                   <div className="ai-translated-container">
                     <div className="translation-divider"></div>
@@ -732,6 +823,11 @@ export default function ChatWindow({
               {activeMessageMenu.type === 'text' && (
                 <div className="context-item" onClick={() => setShowTranslateLanguageSelect(true)}>
                   <MdTranslate /> AI Translate
+                </div>
+              )}
+              {activeMessageMenu.type === 'text' && (
+                <div className="context-item" onClick={handleSpeakMessage}>
+                  <MdVolumeUp /> AI Speak
                 </div>
               )}
               <div className="context-item" onClick={() => { onForwardMessage(activeMessageMenu); setActiveMessageMenu(null); }}>

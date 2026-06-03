@@ -1,13 +1,13 @@
 import React from 'react'
 import axios from 'axios'
-import { MdSearch, MdOutlineCameraAlt, MdOutlineEdit, MdDoneAll, MdMoreVert, MdLogout, MdDeleteSweep } from 'react-icons/md'
+import { MdSearch, MdOutlineCameraAlt, MdOutlineEdit, MdDoneAll, MdMoreVert, MdLogout, MdDeleteSweep, MdPushPin, MdOutlinePushPin } from 'react-icons/md'
 
 const AVATAR_COLORS = [
   '#4e5149', '#963d1e', '#593c66', '#2e4a66', 
   '#335c5c', '#6b4f3b', '#485e6b', '#5c4e4e'
 ];
 
-export default function UserList({ currentUser, users, selectedUser, onSelectUser, onDeleteAccount, onLogout, onDeleteSpecificUser, onCameraClick, onProfileUpdate, serverUrl, onViewImage, onAddFriend }) {
+export default function UserList({ currentUser, users, selectedUser, onSelectUser, onDeleteAccount, onLogout, onDeleteSpecificUser, onCameraClick, onProfileUpdate, serverUrl, onViewImage, onAddFriend, onTogglePinChat }) {
   const [showSettings, setShowSettings] = React.useState(false);
   const [showProfileModal, setShowProfileModal] = React.useState(false);
   const [aboutText, setAboutText] = React.useState(currentUser?.about || 'Available');
@@ -193,7 +193,8 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
                     {user.username}
                     {user.samvad_id === 'ai#9999' && <span className="ai-bot-pill-badge">AI BOT</span>}
                   </h4>
-                  <span className="time-snippet">
+                  <span className="time-snippet" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {!!user.is_pinned && <MdPushPin size={14} style={{ color: '#a855f7', transform: 'rotate(45deg)' }} />}
                     {user.samvad_id === 'ai#9999' ? 'Active 24/7' : (user.online ? 'Online' : new Date(user.last_seen).toLocaleDateString())}
                   </span>
                 </div>
@@ -201,18 +202,30 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
                   <p>{user.about || 'Available'}</p>
                 </div>
               </div>
-              {user.samvad_id !== 'ai#9999' && (
+              <div className="user-list-actions-wrapper" style={{ display: 'flex', gap: '8px', marginLeft: 'auto', paddingLeft: '8px' }}>
                 <div 
-                  className="user-delete-action" 
-                  title="Delete this account"
+                  className="user-pin-action"
+                  title={user.is_pinned ? "Unpin Chat" : "Pin Chat"}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteSpecificUser(user.id, user.username);
+                    if (onTogglePinChat) onTogglePinChat(user.id, !user.is_pinned);
                   }}
                 >
-                  <MdDeleteSweep size={20} />
+                  {user.is_pinned ? <MdPushPin size={18} /> : <MdOutlinePushPin size={18} />}
                 </div>
-              )}
+                {user.samvad_id !== 'ai#9999' && (
+                  <div 
+                     className="user-delete-action" 
+                     title="Delete this account"
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       onDeleteSpecificUser(user.id, user.username);
+                     }}
+                  >
+                    <MdDeleteSweep size={20} />
+                  </div>
+                )}
+              </div>
             </div>
           ))
         )}

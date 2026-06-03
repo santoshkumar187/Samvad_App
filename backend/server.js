@@ -9,7 +9,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v2: cloudinary } = require('cloudinary');
 const { initDB, getPool } = require('./db');
-const { getAssistantReply, getSmartSuggestions, translateText, summarizeConversation } = require('./ai');
+const { getAssistantReply, getSmartSuggestions, translateText, summarizeConversation, synthesizeSpeech } = require('./ai');
 
 // Configure Cloudinary
 cloudinary.config({
@@ -87,11 +87,18 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
   try {
     let folder = 'samvad/files';
-    let resourceType = 'auto';
+    let resourceType = 'raw'; // Default for general files and documents
     const mime = req.file.mimetype;
-    if (mime.startsWith('image/')) folder = 'samvad/images';
-    else if (mime.startsWith('video/')) folder = 'samvad/videos';
-    else if (mime.startsWith('audio/')) folder = 'samvad/audio';
+    if (mime.startsWith('image/')) {
+      folder = 'samvad/images';
+      resourceType = 'image';
+    } else if (mime.startsWith('video/')) {
+      folder = 'samvad/videos';
+      resourceType = 'video';
+    } else if (mime.startsWith('audio/')) {
+      folder = 'samvad/audio';
+      resourceType = 'video'; // Cloudinary expects 'video' for audio uploads
+    }
 
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
@@ -103,6 +110,34 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     console.error('Cloudinary upload error:', err);
     res.status(500).json({ error: 'Upload failed.' });
   }
+});
+
+app.get('/api/view-pdf', (req, res) => {
+  const fileUrl = req.query.url;
+  if (!fileUrl) {
+    return res.status(400).send('Missing url parameter');
+  }
+  
+  // Security check: Only proxy requests to Cloudinary URLs
+  if (!fileUrl.includes('cloudinary.com')) {
+    return res.redirect(fileUrl);
+  }
+
+  const https = require('https');
+  const http = require('http');
+  const client = fileUrl.startsWith('https') ? https : http;
+
+  client.get(fileUrl, (response) => {
+    if (response.statusCode !== 200) {
+      return res.status(response.statusCode).send('Failed to fetch PDF from storage');
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="document.pdf"');
+    response.pipe(res);
+  }).on('error', (err) => {
+    console.error('Error proxying PDF:', err);
+    res.status(500).send('Error loading PDF document');
+  });
 });
 
 app.post('/api/register', async (req, res) => {
@@ -287,22 +322,72 @@ app.get('/api/friends', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
     const [rows] = await pool.query(`
-      SELECT u.id, u.username, u.samvad_id, u.online, u.profile_pic, u.about, u.last_seen 
+      SELECT u.id, u.username, u.samvad_id, u.online, u.profile_pic, u.about, u.last_seen,
+             IF(p.user_id IS NOT NULL, TRUE, FALSE) AS is_pinned
       FROM users u
       JOIN friends f ON (u.id = f.friend_id AND f.user_id = ?) OR (u.id = f.user_id AND f.friend_id = ?)
+      LEFT JOIN pinned_chats p ON p.pinned_user_id = u.id AND p.user_id = ?
       WHERE u.id != ?
       GROUP BY u.id
-    `, [req.user.id, req.user.id, req.user.id]);
+    `, [req.user.id, req.user.id, req.user.id, req.user.id]);
     
     // Auto-append Samvad AI Assistant
-    const [aiRows] = await pool.query('SELECT id, username, samvad_id, online, profile_pic, about, last_seen FROM users WHERE samvad_id = ?', ['ai#9999']);
+    const [aiRows] = await pool.query(`
+      SELECT u.id, u.username, u.samvad_id, u.online, u.profile_pic, u.about, u.last_seen,
+             IF(p.user_id IS NOT NULL, TRUE, FALSE) AS is_pinned
+      FROM users u
+      LEFT JOIN pinned_chats p ON p.pinned_user_id = u.id AND p.user_id = ?
+      WHERE u.samvad_id = ?
+    `, [req.user.id, 'ai#9999']);
+    
     if (aiRows.length > 0) {
       aiRows[0].online = true; // AI is always online
-      rows.unshift(aiRows[0]); // Put AI at the top
+      rows.push(aiRows[0]);
     }
+
+    // Sort: Pinned chats first, with AI Assistant always at the top of its respective group, followed by alphabetical usernames
+    rows.sort((a, b) => {
+      const pinA = a.is_pinned ? 1 : 0;
+      const pinB = b.is_pinned ? 1 : 0;
+      if (pinA !== pinB) {
+        return pinB - pinA;
+      }
+      
+      const isAiA = a.samvad_id === 'ai#9999' ? 1 : 0;
+      const isAiB = b.samvad_id === 'ai#9999' ? 1 : 0;
+      if (isAiA !== isAiB) {
+        return isAiB - isAiA;
+      }
+      
+      return a.username.localeCompare(b.username);
+    });
     
     res.json(rows);
   } catch (error) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/friends/:id/pin', authenticateToken, async (req, res) => {
+  const friendId = req.params.id;
+  try {
+    const pool = getPool();
+    await pool.query('INSERT IGNORE INTO pinned_chats (user_id, pinned_user_id) VALUES (?, ?)', [req.user.id, friendId]);
+    res.json({ message: 'Chat pinned' });
+  } catch (err) {
+    console.error('Error pinning chat:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/friends/:id/unpin', authenticateToken, async (req, res) => {
+  const friendId = req.params.id;
+  try {
+    const pool = getPool();
+    await pool.query('DELETE FROM pinned_chats WHERE user_id = ? AND pinned_user_id = ?', [req.user.id, friendId]);
+    res.json({ message: 'Chat unpinned' });
+  } catch (err) {
+    console.error('Error unpinning chat:', err);
     res.status(500).json({ error: 'Database error' });
   }
 });
@@ -343,6 +428,25 @@ app.post('/api/ai/translate', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Translation error:', err);
     res.status(500).json({ error: 'Failed to translate' });
+  }
+});
+
+// AI Text-to-Speech endpoint
+app.post('/api/ai/tts', authenticateToken, async (req, res) => {
+  const { text, voiceId = 'eve', language = 'en' } = req.body;
+  if (!text || !String(text).trim()) return res.status(400).json({ error: 'Text required' });
+
+  try {
+    const audioBuffer = await synthesizeSpeech(text, voiceId, language);
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.length,
+      'Cache-Control': 'no-store'
+    });
+    res.send(audioBuffer);
+  } catch (err) {
+    console.error('TTS error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to generate speech' });
   }
 });
 
@@ -854,6 +958,17 @@ app.get('*any', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use.`);
+    console.error(`Stop the existing server or start this one with a different PORT, for example: $env:PORT=3001; npm start`);
+    process.exit(1);
+  }
+
+  console.error('Server failed to start:', err);
+  process.exit(1);
+});
+
 initDB().then(() => {
   server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

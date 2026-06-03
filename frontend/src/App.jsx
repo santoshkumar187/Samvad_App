@@ -479,6 +479,21 @@ function App() {
     }
   }
 
+  const handleTogglePinChat = async (userId, shouldPin) => {
+    try {
+      const action = shouldPin ? 'pin' : 'unpin';
+      await axios.post(`${SERVER_URL}/api/friends/${userId}/${action}`);
+      const res = await axios.get(`${SERVER_URL}/api/friends`);
+      setUsers(res.data);
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser(prev => ({ ...prev, is_pinned: shouldPin }));
+      }
+    } catch (err) {
+      console.error('Failed to toggle pin state:', err);
+      alert('Failed to update chat pin state');
+    }
+  }
+
   // ── Call Handlers ──────────────────────────────────────────────
   const handleStartCall = (callType) => {
     if (!selectedUser || !socketInstance) return;
@@ -614,6 +629,7 @@ function App() {
           serverUrl={SERVER_URL}
           onViewImage={setViewingImageUrl}
           onAddFriend={handleAddFriend}
+          onTogglePinChat={handleTogglePinChat}
         />
       </div>
       

@@ -52,8 +52,7 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
     }
 
     try {
-      // Import axios dynamically if needed, but we already import it.
-      const res = await (require('axios').default || require('axios')).post(`${serverUrl}/api/groups`, formData, {
+      const res = await axios.post(`${serverUrl}/api/groups`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setShowCreateGroupModal(false);

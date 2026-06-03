@@ -512,6 +512,17 @@ function App() {
       socketInstance.emit('join_group', { groupId: group.id });
     });
 
+    socketInstance.on('group_deleted', ({ groupId, name }) => {
+      setUsers(prev => prev.filter(u => !(u.isGroup && u.id === groupId)));
+      setSelectedUser(prev => {
+        if (prev && prev.isGroup && prev.id === groupId) {
+          alert(`Group "${name}" has been deleted by the creator.`);
+          return null;
+        }
+        return prev;
+      });
+    });
+
     socketInstance.on('messages_read', ({ receiver_id }) => {
       setMessages(prev => prev.map(m => m.receiver_id === receiver_id ? { ...m, status: 'read' } : m))
     })
@@ -553,6 +564,7 @@ function App() {
       socketInstance.off('user_typing')
       socketInstance.off('user_stopped_typing')
       socketInstance.off('group_created')
+      socketInstance.off('group_deleted')
       socketInstance.off('message_pinned')
       socketInstance.off('messages_read')
       socketInstance.off('incoming_call')
@@ -997,6 +1009,10 @@ function App() {
           hasMoreMessages={hasMoreMessages}
           loadingMore={loadingMore}
           onLoadMoreMessages={handleLoadMoreMessages}
+          onDeleteGroup={(groupId) => {
+            setUsers(prev => prev.filter(u => !(u.isGroup && u.id === groupId)));
+            setSelectedUser(null);
+          }}
         />
         {selectedUser && (
           <MessageInput 

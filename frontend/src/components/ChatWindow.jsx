@@ -149,7 +149,7 @@ export default function ChatWindow({
   currentUser, selectedUser, messages, onSendMessage, serverUrl, onBack, 
   onClearChat, onDeleteMessage, onReactMessage, onPinMessage, onReplyMessage, 
   onForwardMessage, isSidebarHidden, onToggleSidebar, isTyping, onViewImage, 
-  onStartCall, hasMoreMessages, loadingMore, onLoadMoreMessages 
+  onStartCall, hasMoreMessages, loadingMore, onLoadMoreMessages, onDeleteGroup
 }) {
   const [showMenu, setShowMenu] = useState(false)
   const [activeMessageMenu, setActiveMessageMenu] = useState(null)
@@ -725,6 +725,25 @@ export default function ChatWindow({
                     }
                   }}>
                     <MdDeleteOutline /> Clear Chat
+                  </div>
+                )}
+                {selectedUser.isGroup && currentUser && selectedUser.creator_id === currentUser.id && (
+                  <div className="dropdown-item" style={{ color: '#ef4444' }} onClick={async (e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`Are you sure you want to delete the group "${selectedUser.name}"? This will permanently delete all messages and remove all members.`)) {
+                      try {
+                        await axios.delete(`${serverUrl}/api/groups/${selectedUser.id}`);
+                        setShowMenu(false);
+                        if (onDeleteGroup) {
+                          onDeleteGroup(selectedUser.id);
+                        }
+                      } catch (err) {
+                        console.error('Failed to delete group:', err);
+                        alert(err.response?.data?.error || 'Failed to delete group');
+                      }
+                    }
+                  }}>
+                    <MdDeleteOutline /> Delete Group
                   </div>
                 )}
               </div>

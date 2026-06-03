@@ -717,6 +717,46 @@ app.get('/api/groups', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/api/groups/:groupId', authenticateToken, async (req, res) => {
+  const { groupId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const pool = getPool();
+    
+    // Check if the group exists and the user is the creator
+    const [groupRows] = await pool.query('SELECT creator_id, name FROM `groups` WHERE id = ?', [groupId]);
+    if (groupRows.length === 0) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const group = groupRows[0];
+    if (group.creator_id !== userId) {
+      return res.status(403).json({ error: 'Only the group creator can delete the group' });
+    }
+
+    // Fetch all members of this group before deleting so we can notify them via socket
+    const [members] = await pool.query('SELECT user_id FROM group_members WHERE group_id = ?', [groupId]);
+    const memberIds = members.map(m => m.user_id);
+
+    // Delete the group (cascades delete on group_members and group_messages in the DB)
+    await pool.query('DELETE FROM `groups` WHERE id = ?', [groupId]);
+
+    // Broadcast socket event to all members of the group
+    memberIds.forEach(mId => {
+      const socketId = connectedUsers.get(mId);
+      if (socketId) {
+        io.to(socketId).emit('group_deleted', { groupId: parseInt(groupId), name: group.name });
+      }
+    });
+
+    res.json({ message: 'Group deleted successfully' });
+  } catch (error) {
+    console.error('Failed to delete group:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.get('/api/messages/group/:groupId', authenticateToken, async (req, res) => {
   const { groupId } = req.params;
   const beforeId = req.query.beforeId ? parseInt(req.query.beforeId) : null;

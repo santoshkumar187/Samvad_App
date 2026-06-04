@@ -18,7 +18,7 @@ const SERVER_URL = (
   /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(window.location.hostname)
 ) 
   ? `${window.location.protocol}//${window.location.hostname}:3000` 
-  : '';
+  : (import.meta.env.VITE_API_BASE_URL || '');
 
 // Axios interceptor for JWT
 axios.interceptors.request.use(

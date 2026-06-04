@@ -182,70 +182,84 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
   return (
     <div className="user-list-sidebar">
       <div className="sidebar-header">
-        <div 
-          className="user-avatar" 
-          style={{ margin: 0, width: '38px', height: '38px', fontSize: '1rem', background: '#333', cursor: 'pointer' }}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (currentUser.profile_pic) onViewImage(currentUser.profile_pic.startsWith('http') ? currentUser.profile_pic : `${serverUrl}${currentUser.profile_pic}`);
-            else setShowProfileModal(true);
-          }}
-        >
-          {currentUser.profile_pic ? (
-            <img src={currentUser.profile_pic.startsWith('http') ? currentUser.profile_pic : `${serverUrl}${currentUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-          ) : (
-            currentUser.username.charAt(0).toUpperCase()
-          )}
+        <div className="sidebar-header-top">
+          <div 
+            className="user-profile-summary" 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (currentUser.profile_pic) onViewImage(currentUser.profile_pic.startsWith('http') ? currentUser.profile_pic : `${serverUrl}${currentUser.profile_pic}`);
+              else setShowProfileModal(true);
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+          >
+            <div 
+              className="user-avatar" 
+              style={{ margin: 0, width: '36px', height: '36px', fontSize: '1rem', background: '#333' }}
+            >
+              {currentUser.profile_pic ? (
+                <img src={currentUser.profile_pic.startsWith('http') ? currentUser.profile_pic : `${serverUrl}${currentUser.profile_pic}`} alt="dp" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                currentUser.username.charAt(0).toUpperCase()
+              )}
+            </div>
+            <span className="user-profile-name">
+              {currentUser.username}
+            </span>
+          </div>
+
+          <div className="settings-trigger" style={{ position: 'relative' }}>
+            <MdMoreVert 
+              size={24} 
+              color="#8e8e93" 
+              style={{ cursor: 'pointer' }} 
+              onClick={() => setShowSettings(!showSettings)}
+            />
+            {showSettings && (
+              <>
+                <div 
+                  className="dropdown-overlay" 
+                  onClick={() => setShowSettings(false)} 
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 998,
+                    background: 'transparent',
+                    cursor: 'default'
+                  }} 
+                />
+                <div className="header-dropdown" style={{ left: 'auto', right: 0, zIndex: 999 }}>
+                  <div className="dropdown-item" onClick={() => { setShowCreateGroupModal(true); setShowSettings(false); }}>
+                    <MdGroupAdd /> Create Group
+                  </div>
+                  <div className="dropdown-item" onClick={() => { setShowProfileModal(true); setShowSettings(false); }}>
+                    <MdOutlineEdit /> Edit Profile
+                  </div>
+                  <div className="dropdown-item" onClick={() => { onLogout(); setShowSettings(false); }}>
+                    <MdLogout /> Logout
+                  </div>
+                  <div className="dropdown-item" onClick={() => { onDeleteAccount(); setShowSettings(false); }} style={{ color: '#eb5757' }}>
+                    <MdDeleteSweep /> Delete Account
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-        <div className="search-bar">
-          <MdSearch size={22} color="#8e8e93" />
-          <input 
-            type="text" 
-            placeholder="Search samvadId (e.g. user#1234)" 
-            value={searchId}
-            onChange={e => setSearchId(e.target.value)}
-            onKeyDown={handleSearch}
-          />
-        </div>
-        <div className="settings-trigger" style={{ position: 'relative' }}>
-          <MdMoreVert 
-            size={24} 
-            color="#8e8e93" 
-            style={{ cursor: 'pointer' }} 
-            onClick={() => setShowSettings(!showSettings)}
-          />
-          {showSettings && (
-            <>
-              <div 
-                className="dropdown-overlay" 
-                onClick={() => setShowSettings(false)} 
-                style={{
-                  position: 'fixed',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  zIndex: 998,
-                  background: 'transparent',
-                  cursor: 'default'
-                }} 
-              />
-              <div className="header-dropdown" style={{ left: 'auto', right: 0, zIndex: 999 }}>
-                <div className="dropdown-item" onClick={() => { setShowCreateGroupModal(true); setShowSettings(false); }}>
-                  <MdGroupAdd /> Create Group
-                </div>
-                <div className="dropdown-item" onClick={() => { setShowProfileModal(true); setShowSettings(false); }}>
-                  <MdOutlineEdit /> Edit Profile
-                </div>
-                <div className="dropdown-item" onClick={() => { onLogout(); setShowSettings(false); }}>
-                  <MdLogout /> Logout
-                </div>
-                <div className="dropdown-item" onClick={() => { onDeleteAccount(); setShowSettings(false); }} style={{ color: '#eb5757' }}>
-                  <MdDeleteSweep /> Delete Account
-                </div>
-              </div>
-            </>
-          )}
+
+        <div className="sidebar-search-row">
+          <div className="search-bar">
+            <MdSearch size={22} color="#8e8e93" />
+            <input 
+              type="text" 
+              placeholder="Search samvadId (e.g. user#1234)" 
+              value={searchId}
+              onChange={e => setSearchId(e.target.value)}
+              onKeyDown={handleSearch}
+            />
+          </div>
         </div>
       </div>
       

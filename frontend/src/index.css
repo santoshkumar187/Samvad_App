@@ -141,11 +141,40 @@ body {
 }
 
 .sidebar-header {
-  padding: 1.2rem 1rem 0.6rem 1rem;
+  padding: 1rem 1rem 0.8rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  background-color: var(--signal-sidebar);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.user-profile-summary {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  background-color: var(--signal-sidebar);
+  gap: 10px;
+  cursor: pointer;
+  max-width: 80%;
+}
+
+.user-profile-name {
+  font-weight: 600;
+  color: var(--signal-text-main);
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-search-row {
+  width: 100%;
 }
 
 .search-bar {
@@ -296,6 +325,8 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   z-index: 10;
+  height: 64px;
+  box-sizing: border-box;
 }
 
 .back-btn {
@@ -1460,14 +1491,19 @@ body {
   }
 
   .chat-header {
-    padding: 0.4rem 0.6rem;
-    min-height: 55px;
+    padding: 0.4rem 0.8rem;
+    height: 56px !important;
+    min-height: 56px !important;
+    box-sizing: border-box;
   }
 
   .sidebar-header {
-    padding: 0.5rem;
-    min-height: 55px;
-    gap: 8px;
+    padding: 0.8rem 0.8rem 0.6rem 0.8rem !important;
+    min-height: unset !important;
+    height: auto !important;
+    gap: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
   .back-btn {
@@ -1492,6 +1528,10 @@ body {
 
   .user-info h4 {
     font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100vw - 180px) !important;
   }
 
   .user-info-bottom p {
@@ -1499,12 +1539,17 @@ body {
   }
 
   /* Message Bubble adjustments */
+  .message-wrapper {
+    max-width: 85% !important;
+  }
+
   .message-bubble {
-    max-width: 85%;
+    max-width: 100% !important;
     display: flex;
     flex-direction: column;
-    padding: 0.5rem 0.8rem;
-    font-size: 0.9rem;
+    padding: 0.6rem 0.9rem !important;
+    font-size: 0.95rem !important;
+    line-height: 1.45 !important;
   }
 
   .bubble-meta {

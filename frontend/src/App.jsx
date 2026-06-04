@@ -228,7 +228,7 @@ function App() {
     const newToast = {
       id,
       message: msg.content || 'Sent a media file',
-      senderName: sender.username,
+      senderName: sender.username || sender.name || 'Someone',
       senderId: sender.id,
       senderAvatar: sender.profile_pic,
       isGroup: sender.isGroup
@@ -731,25 +731,36 @@ function App() {
     socketInstance.emit('pin_message', { messageId, isPinned, receiver_id: selectedUser.id });
   }
 
-  const handleForward = (userId) => {
+  const handleForward = (targetUser) => {
     if (!forwardingMessage || !socketInstance) return;
     const correlationId = `${Date.now()}-fw-${Math.random().toString(36).substr(2, 9)}`;
     const forwardedMsg = {
       sender_id: currentUser.id,
-      receiver_id: userId,
       content: forwardingMessage.content,
       type: forwardingMessage.type,
       file_url: forwardingMessage.file_url,
       is_forwarded: true,
       correlationId: correlationId
     };
+    if (targetUser.isGroup) {
+      forwardedMsg.group_id = targetUser.id;
+    } else {
+      forwardedMsg.receiver_id = targetUser.id;
+    }
     socketInstance.emit('send_message', forwardedMsg);
-    if (selectedUser?.id === userId) {
-      setMessages(prev => [...prev, { ...forwardedMsg, id: Date.now(), timestamp: new Date().toISOString(), isOptimistic: true }]);
+    
+    const isSameChat = selectedUser && 
+      (targetUser.isGroup 
+        ? (selectedUser.isGroup && Number(selectedUser.id) === Number(targetUser.id))
+        : (!selectedUser.isGroup && Number(selectedUser.id) === Number(targetUser.id)));
+
+    if (isSameChat) {
+      setMessages(prev => [...prev, { ...forwardedMsg, sender_name: currentUser.username, id: Date.now(), timestamp: new Date().toISOString(), isOptimistic: true }]);
     }
     setForwardingMessage(null);
     alert('Message forwarded!');
   }
+
 
   const handleDeleteSpecificUser = async (userId, targetUsername) => {
     if (window.confirm(`PERMANENTLY delete account "${targetUsername}" and all their data? This cannot be undone.`)) {
@@ -1036,14 +1047,18 @@ function App() {
           <div className="forward-modal" onClick={e => e.stopPropagation()}>
             <h3>Forward to...</h3>
             <div className="forward-user-list">
-              {users.map(u => (
-                <div key={u.id} className="forward-user-item" onClick={() => handleForward(u.id)}>
-                   <div className="user-avatar" style={{width: '32px', height: '32px', fontSize: '0.9rem', marginRight: '10px'}}>
-                     {u.username.charAt(0).toUpperCase()}
-                   </div>
-                   <span>{u.username}</span>
-                </div>
-              ))}
+              {users.map(u => {
+                const displayName = u.isGroup ? u.name : u.username;
+                const avatarChar = displayName ? displayName.charAt(0).toUpperCase() : '?';
+                return (
+                  <div key={u.isGroup ? `group-${u.id}` : `user-${u.id}`} className="forward-user-item" onClick={() => handleForward(u)}>
+                     <div className="user-avatar" style={{width: '32px', height: '32px', fontSize: '0.9rem', marginRight: '10px'}}>
+                       {avatarChar}
+                     </div>
+                     <span>{displayName}</span>
+                  </div>
+                );
+              })}
             </div>
             <button className="cancel-btn" onClick={() => setForwardingMessage(null)}>Cancel</button>
           </div>
@@ -1096,11 +1111,11 @@ function App() {
               {t.senderAvatar ? (
                 <img src={t.senderAvatar.startsWith('http') ? t.senderAvatar : `${SERVER_URL}${t.senderAvatar}`} alt="" />
               ) : (
-                t.senderName.charAt(0).toUpperCase()
+                (t.senderName || 'Someone').charAt(0).toUpperCase()
               )}
             </div>
             <div className="toast-details">
-              <h4>{t.senderName}</h4>
+              <h4>{t.senderName || 'Someone'}</h4>
               <p>{t.message}</p>
             </div>
             <div className="toast-close" onClick={(e) => { e.stopPropagation(); setToasts(prev => prev.filter(toast => toast.id !== t.id)); }}>&times;</div>

@@ -157,8 +157,18 @@ export default function ChatWindow({
   const [showThemeSelector, setShowThemeSelector] = useState(false)
   const [previewFile, setPreviewFile] = useState(null)
   const [previewTextContent, setPreviewTextContent] = useState(null)
-  const [chatTheme, setChatTheme] = useState(() => localStorage.getItem('samvad_chat_theme') || 'default')
-  const [customWallpaperUrl, setCustomWallpaperUrl] = useState(() => localStorage.getItem('samvad_custom_wallpaper') || '')
+  const [chatTheme, setChatTheme] = useState('default')
+  const [customWallpaperUrl, setCustomWallpaperUrl] = useState('')
+
+  useEffect(() => {
+    if (!selectedUser) return;
+    const chatKey = selectedUser.isGroup ? `group_${selectedUser.id}` : `user_${selectedUser.id}`;
+    const savedTheme = localStorage.getItem(`samvad_theme_${chatKey}`) || 'default';
+    const savedWallpaper = localStorage.getItem(`samvad_wallpaper_${chatKey}`) || '';
+    setChatTheme(savedTheme);
+    setCustomWallpaperUrl(savedWallpaper);
+  }, [selectedUser]);
+
   const [longPressTimer, setLongPressTimer] = useState(null)
   const fileInputRef = useRef(null)
   const touchStartX = useRef(null)
@@ -310,7 +320,10 @@ export default function ChatWindow({
 
   const handleSetTheme = (themeId) => {
     setChatTheme(themeId);
-    localStorage.setItem('samvad_chat_theme', themeId);
+    if (selectedUser) {
+      const chatKey = selectedUser.isGroup ? `group_${selectedUser.id}` : `user_${selectedUser.id}`;
+      localStorage.setItem(`samvad_theme_${chatKey}`, themeId);
+    }
   }
 
   const handleGalleryUpload = async (e) => {
@@ -324,9 +337,12 @@ export default function ChatWindow({
       const res = await axios.post(`${serverUrl}/api/upload`, formData);
       const url = res.data.url.startsWith('http') ? res.data.url : `${serverUrl}${res.data.url}`;
       setCustomWallpaperUrl(url);
-      localStorage.setItem('samvad_custom_wallpaper', url);
       setChatTheme('custom');
-      localStorage.setItem('samvad_chat_theme', 'custom');
+      if (selectedUser) {
+        const chatKey = selectedUser.isGroup ? `group_${selectedUser.id}` : `user_${selectedUser.id}`;
+        localStorage.setItem(`samvad_wallpaper_${chatKey}`, url);
+        localStorage.setItem(`samvad_theme_${chatKey}`, 'custom');
+      }
     } catch (err) {
       console.error('Wallpaper upload failed', err);
       alert('Failed to upload wallpaper');

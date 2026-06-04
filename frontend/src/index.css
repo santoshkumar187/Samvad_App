@@ -480,6 +480,17 @@ body {
   margin-bottom: 6px;
   font-size: 0.85rem;
   opacity: 0.9;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
+}
+
+.message-reply-quote:hover {
+  background: rgba(139, 92, 246, 0.18); /* Soft brand-violet highlight */
+  opacity: 1;
+}
+
+.message-reply-quote:active {
+  transform: scale(0.97);
 }
 
 .message-reply-quote strong {

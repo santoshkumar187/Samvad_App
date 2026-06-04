@@ -323,6 +323,23 @@ export default function ChatWindow({
     }
   };
 
+  const scrollToAndHighlightMessage = (messageId) => {
+    if (!messageId) return;
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const bubble = el.querySelector('.message-bubble');
+      if (bubble) {
+        bubble.classList.remove('highlight-pulse');
+        void bubble.offsetWidth; // Trigger reflow
+        bubble.classList.add('highlight-pulse');
+        setTimeout(() => {
+          if (bubble) bubble.classList.remove('highlight-pulse');
+        }, 2000);
+      }
+    }
+  };
+
   const triggerMessageMenu = (msg) => {
     setActiveMessageMenu(msg);
     setTimeout(() => {
@@ -830,20 +847,7 @@ export default function ChatWindow({
         <div className="pinned-messages-bar" onClick={() => {
           const firstPinned = [...messages].reverse().find(m => m.is_pinned);
           if (firstPinned) {
-            const el = document.getElementById(`msg-${firstPinned.id}`);
-            if (el) {
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              const bubble = el.querySelector('.message-bubble');
-              if (bubble) {
-                bubble.classList.remove('highlight-pulse'); // reset if already running
-                // Trigger reflow
-                void bubble.offsetWidth;
-                bubble.classList.add('highlight-pulse');
-                setTimeout(() => {
-                  if (bubble) bubble.classList.remove('highlight-pulse');
-                }, 2000);
-              }
-            }
+            scrollToAndHighlightMessage(firstPinned.id);
           }
         }}>
           <MdPushPin size={16} />
@@ -961,7 +965,14 @@ export default function ChatWindow({
                   </div>
                 )}
                 {msg.reply_to && (
-                  <div className="message-reply-quote">
+                  <div 
+                    className="message-reply-quote"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      scrollToAndHighlightMessage(msg.reply_to);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <strong>{msg.parent_sender_name === currentUser.username ? 'You' : msg.parent_sender_name}</strong>
                     <p>{msg.parent_content || 'Media'}</p>
                   </div>

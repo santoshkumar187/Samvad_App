@@ -2901,24 +2901,28 @@ body {
 
 /* 7. Pinned Message Pulse Glow Highlight */
 .message-bubble.highlight-pulse {
-  animation: pulseGlowHighlight 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation: pulseGlowHighlight 1.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
 @keyframes pulseGlowHighlight {
   0% {
-    box-shadow: 0 0 0 0px rgba(139, 92, 246, 0.8), 0 4px 6px rgba(0,0,0,0.1);
+    box-shadow: 0 0 0 0px rgba(168, 85, 247, 0.9), 0 4px 6px rgba(0, 0, 0, 0.1);
+    filter: brightness(1.5) saturate(1.2);
     transform: scale(1);
   }
   30% {
-    box-shadow: 0 0 0 8px rgba(139, 92, 246, 0), 0 4px 6px rgba(0,0,0,0.1);
-    transform: scale(1.02);
+    box-shadow: 0 0 30px 10px rgba(168, 85, 247, 0.7), 0 4px 6px rgba(0, 0, 0, 0.1);
+    filter: brightness(1.7) saturate(1.4);
+    transform: scale(1.03);
   }
-  60% {
-    box-shadow: 0 0 0 14px rgba(139, 92, 246, 0), 0 4px 6px rgba(0,0,0,0.1);
+  70% {
+    box-shadow: 0 0 15px 4px rgba(168, 85, 247, 0.3), 0 4px 6px rgba(0, 0, 0, 0.1);
+    filter: brightness(1.2) saturate(1.1);
     transform: scale(0.99);
   }
   100% {
-    box-shadow: 0 0 0 0px rgba(139, 92, 246, 0), 0 4px 6px rgba(0,0,0,0.1);
+    box-shadow: 0 0 0 0px rgba(168, 85, 247, 0), 0 4px 6px rgba(0, 0, 0, 0.1);
+    filter: brightness(1) saturate(1);
     transform: scale(1);
   }
 }

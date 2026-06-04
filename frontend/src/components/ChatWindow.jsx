@@ -256,6 +256,27 @@ export default function ChatWindow({
     setActiveMessageMenu(null);
     setSpeakingMessageId(msg.id);
 
+    const speakFallback = (text) => {
+      if ('speechSynthesis' in window) {
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+
+        // Choose a preferred English voice if available
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural')));
+        if (preferredVoice) utterance.voice = preferredVoice;
+
+        utterance.onend = () => setSpeakingMessageId(null);
+        utterance.onerror = () => setSpeakingMessageId(null);
+        window.speechSynthesis.speak(utterance);
+      } else {
+        alert('Speech synthesis failed and browser Text-to-Speech is not supported.');
+        setSpeakingMessageId(null);
+      }
+    };
+
     try {
       const res = await axios.post(
         `${serverUrl}/api/ai/tts`,
@@ -268,14 +289,21 @@ export default function ChatWindow({
       );
       const audioUrl = URL.createObjectURL(res.data);
       const audio = new Audio(audioUrl);
-      audio.onended = () => URL.revokeObjectURL(audioUrl);
-      audio.onerror = () => URL.revokeObjectURL(audioUrl);
+      
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        setSpeakingMessageId(null);
+      };
+      
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        setSpeakingMessageId(null);
+      };
+      
       await audio.play();
     } catch (err) {
-      console.error('Failed to speak message:', err);
-      alert('Failed to generate speech.');
-    } finally {
-      setSpeakingMessageId(null);
+      console.warn('Server TTS failed, falling back to browser SpeechSynthesis.', err);
+      speakFallback(msg.content);
     }
   };
 

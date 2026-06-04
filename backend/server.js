@@ -140,10 +140,19 @@ app.get('/api/view-pdf', async (req, res) => {
         if (publicIdParts.length > 0 && /^v\d+$/.test(publicIdParts[0])) {
           publicIdParts = publicIdParts.slice(1);
         }
-        const publicId = decodeURIComponent(publicIdParts.join('/'));
+        
+        let publicId = decodeURIComponent(publicIdParts.join('/'));
+        let format = '';
+        if (resourceType === 'image' || resourceType === 'video') {
+          const dotParts = publicId.split('.');
+          if (dotParts.length > 1) {
+            format = dotParts.pop();
+            publicId = dotParts.join('.');
+          }
+        }
         
         // Generate a signed URL using private_download_url
-        targetUrl = cloudinary.utils.private_download_url(publicId, '', {
+        targetUrl = cloudinary.utils.private_download_url(publicId, format, {
           resource_type: resourceType,
           type: type
         });
@@ -152,11 +161,24 @@ app.get('/api/view-pdf', async (req, res) => {
       console.error('Failed to parse and sign Cloudinary URL, falling back to original URL:', parseErr.message);
     }
 
-    const response = await axios({
-      method: 'get',
-      url: targetUrl,
-      responseType: 'stream'
-    });
+    let response;
+    try {
+      response = await axios({
+        method: 'get',
+        url: targetUrl,
+        responseType: 'stream',
+        timeout: 15000
+      });
+    } catch (fetchErr) {
+      console.warn('Failed to fetch signed PDF URL, falling back to original URL:', fetchErr.message);
+      // Fallback to fetch original URL directly
+      response = await axios({
+        method: 'get',
+        url: fileUrl,
+        responseType: 'stream',
+        timeout: 15000
+      });
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="document.pdf"');

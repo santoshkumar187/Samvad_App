@@ -127,6 +127,17 @@ async function initDB() {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pinned_groups (
+        user_id INT,
+        group_id INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, group_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (group_id) REFERENCES \`groups\`(id) ON DELETE CASCADE
+      );
+    `);
+
     console.log('Database tables initialized successfully.');
 
     // Migration checks

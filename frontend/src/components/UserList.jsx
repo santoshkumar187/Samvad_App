@@ -25,6 +25,73 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
   const [groupAvatarFile, setGroupAvatarFile] = React.useState(null);
   const groupAvatarInputRef = React.useRef(null);
 
+  const [contextMenu, setContextMenu] = React.useState(null); // { x, y, user }
+
+  React.useEffect(() => {
+    const handleGlobalClick = () => {
+      if (contextMenu) setContextMenu(null);
+    };
+    window.addEventListener('click', handleGlobalClick);
+    window.addEventListener('scroll', handleGlobalClick);
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('scroll', handleGlobalClick);
+    };
+  }, [contextMenu]);
+
+  const touchTimerRef = React.useRef(null);
+  const touchStartPos = React.useRef({ x: 0, y: 0 });
+
+  const handleTouchStart = (e, user) => {
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+    touchTimerRef.current = setTimeout(() => {
+      const menuWidth = 160;
+      const menuHeight = 100;
+      let x = touch.clientX;
+      let y = touch.clientY;
+      if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+      if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+      
+      setContextMenu({ x, y, user });
+      if (navigator.vibrate) navigator.vibrate(50);
+      touchTimerRef.current = null;
+    }, 600);
+  };
+
+  const handleTouchMove = (e) => {
+    if (touchTimerRef.current) {
+      const touch = e.touches[0];
+      const diffX = Math.abs(touch.clientX - touchStartPos.current.x);
+      const diffY = Math.abs(touch.clientY - touchStartPos.current.y);
+      if (diffX > 10 || diffY > 10) {
+        clearTimeout(touchTimerRef.current);
+        touchTimerRef.current = null;
+      }
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+  };
+
+  const handleContextMenu = (e, user) => {
+    e.preventDefault();
+    const menuWidth = 160;
+    const menuHeight = 100;
+    let x = e.clientX;
+    let y = e.clientY;
+    if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+    if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+    
+    setContextMenu({ x, y, user });
+  };
+
   const toggleMemberSelection = (userId) => {
     setSelectedGroupMembers(prev => 
       prev.includes(userId) 
@@ -226,6 +293,10 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
               key={user.isGroup ? `group-${user.id}` : `user-${user.id}`} 
               className={`user-item ${selectedUser?.id === user.id && !!selectedUser?.isGroup === !!user.isGroup ? 'active' : ''}`}
               onClick={() => onSelectUser(user)}
+              onContextMenu={(e) => handleContextMenu(e, user)}
+              onTouchStart={(e) => handleTouchStart(e, user)}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             >
               <div className="user-avatar" 
                 style={{ background: getAvatarColor(user.id), cursor: 'pointer' }}
@@ -265,7 +336,7 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
                     {user.isGroup && <span className="ai-bot-pill-badge" style={{ backgroundColor: 'var(--brand-violet)' }}>GROUP</span>}
                   </h4>
                   <span className="time-snippet" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {!user.isGroup && !!user.is_pinned && <MdPushPin size={14} style={{ color: '#a855f7', transform: 'rotate(45deg)' }} />}
+                    {!!user.is_pinned && <MdPushPin size={14} style={{ color: '#a855f7', transform: 'rotate(45deg)' }} />}
                     {user.isGroup ? 'Group Chat' : (user.samvad_id === 'ai#9999' ? 'Active 24/7' : (user.online ? 'Online' : new Date(user.last_seen).toLocaleDateString()))}
                   </span>
                 </div>
@@ -273,32 +344,6 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
                   <p>{user.isGroup ? `${user.members?.length || 0} members` : (user.about || 'Available')}</p>
                 </div>
               </div>
-              {!user.isGroup && (
-                <div className="user-list-actions-wrapper" style={{ display: 'flex', gap: '8px', marginLeft: 'auto', paddingLeft: '8px' }}>
-                  <div 
-                    className="user-pin-action"
-                    title={user.is_pinned ? "Unpin Chat" : "Pin Chat"}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onTogglePinChat) onTogglePinChat(user.id, !user.is_pinned);
-                    }}
-                  >
-                    {user.is_pinned ? <MdPushPin size={18} /> : <MdOutlinePushPin size={18} />}
-                  </div>
-                  {user.samvad_id !== 'ai#9999' && (
-                    <div 
-                       className="user-delete-action" 
-                       title="Delete this account"
-                       onClick={(e) => {
-                         e.stopPropagation();
-                         onDeleteSpecificUser(user.id, user.username);
-                       }}
-                    >
-                      <MdDeleteSweep size={20} />
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           ))
         )}
@@ -439,6 +484,89 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {contextMenu && (
+        <div 
+          className="chat-context-menu"
+          style={{
+            position: 'fixed',
+            top: `${contextMenu.y}px`,
+            left: `${contextMenu.x}px`,
+            zIndex: 9999,
+            background: 'rgba(18, 18, 18, 0.95)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '12px',
+            padding: '6px 0',
+            minWidth: '160px',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div 
+            className="context-menu-item"
+            style={{
+              padding: '10px 16px',
+              fontSize: '0.9rem',
+              color: '#eee',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              transition: 'background 0.2s'
+            }}
+            onClick={() => {
+              if (onTogglePinChat) {
+                onTogglePinChat(contextMenu.user.id, !contextMenu.user.is_pinned, contextMenu.user.isGroup);
+              }
+              setContextMenu(null);
+            }}
+          >
+            <MdPushPin style={{ transform: contextMenu.user.is_pinned ? 'none' : 'rotate(45deg)', color: 'var(--brand-violet)', fontSize: '1.1rem' }} />
+            {contextMenu.user.is_pinned ? 'Unpin Chat' : 'Pin Chat'}
+          </div>
+
+          {/* Delete Option */}
+          {contextMenu.user.samvad_id !== 'ai#9999' && (
+            <div 
+              className="context-menu-item"
+              style={{
+                padding: '10px 16px',
+                fontSize: '0.9rem',
+                color: '#ef4444',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                transition: 'background 0.2s',
+                borderTop: '1px solid rgba(255, 255, 255, 0.05)'
+              }}
+              onClick={async () => {
+                const user = contextMenu.user;
+                setContextMenu(null);
+                if (user.isGroup) {
+                  if (currentUser && user.creator_id === currentUser.id) {
+                    if (window.confirm(`Are you sure you want to delete the group "${user.name}"? This will permanently delete all messages and remove all members.`)) {
+                      try {
+                        await axios.delete(`${serverUrl}/api/groups/${user.id}`);
+                      } catch (err) {
+                        alert(err.response?.data?.error || 'Failed to delete group');
+                      }
+                    }
+                  } else {
+                    alert('Only the group creator can delete this group.');
+                  }
+                } else {
+                  onDeleteSpecificUser(user.id, user.username);
+                }
+              }}
+            >
+              <MdDeleteSweep style={{ fontSize: '1.2rem' }} />
+              {contextMenu.user.isGroup ? 'Delete Group' : 'Delete Chat'}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -815,13 +815,37 @@ function App() {
     }
   }
 
-  const handleTogglePinChat = async (userId, shouldPin) => {
+  const handleTogglePinChat = async (chatId, shouldPin, isGroup) => {
     try {
       const action = shouldPin ? 'pin' : 'unpin';
-      await axios.post(`${SERVER_URL}/api/friends/${userId}/${action}`);
-      const res = await axios.get(`${SERVER_URL}/api/friends`);
-      setUsers(res.data);
-      if (selectedUser && selectedUser.id === userId) {
+      const endpoint = isGroup 
+        ? `/api/groups/${chatId}/${action}` 
+        : `/api/friends/${chatId}/${action}`;
+      await axios.post(`${SERVER_URL}${endpoint}`);
+      
+      // Update local state for immediate feedback
+      setUsers(prev => {
+        const updated = prev.map(u => (Number(u.id) === Number(chatId) && !!u.isGroup === !!isGroup) ? { ...u, is_pinned: shouldPin } : u);
+        
+        // Sort immediately to reflect the change
+        updated.sort((a, b) => {
+          const pinA = a.is_pinned ? 1 : 0;
+          const pinB = b.is_pinned ? 1 : 0;
+          if (pinA !== pinB) return pinB - pinA;
+          
+          const isAiA = a.samvad_id === 'ai#9999' ? 1 : 0;
+          const isAiB = b.samvad_id === 'ai#9999' ? 1 : 0;
+          if (isAiA !== isAiB) return isAiB - isAiA;
+          
+          const nameA = a.username || a.name || '';
+          const nameB = b.username || b.name || '';
+          return nameA.localeCompare(nameB);
+        });
+        
+        return updated;
+      });
+
+      if (selectedUser && selectedUser.id === chatId && !!selectedUser.isGroup === !!isGroup) {
         setSelectedUser(prev => ({ ...prev, is_pinned: shouldPin }));
       }
     } catch (err) {

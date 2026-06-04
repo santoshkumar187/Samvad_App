@@ -467,6 +467,31 @@ app.post('/api/friends/:id/unpin', authenticateToken, async (req, res) => {
   }
 });
 
+app.post('/api/groups/:id/pin', authenticateToken, async (req, res) => {
+  const groupId = req.params.id;
+  try {
+    const pool = getPool();
+    await pool.query('INSERT IGNORE INTO pinned_groups (user_id, group_id) VALUES (?, ?)', [req.user.id, groupId]);
+    res.json({ message: 'Group pinned' });
+  } catch (err) {
+    console.error('Error pinning group:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/groups/:id/unpin', authenticateToken, async (req, res) => {
+  const groupId = req.params.id;
+  try {
+    const pool = getPool();
+    await pool.query('DELETE FROM pinned_groups WHERE user_id = ? AND group_id = ?', [req.user.id, groupId]);
+    res.json({ message: 'Group unpinned' });
+  } catch (err) {
+    console.error('Error unpinning group:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+
 // AI smart replies suggestions
 app.get('/api/ai/suggestions', authenticateToken, async (req, res) => {
   const { receiverId } = req.query;
@@ -692,12 +717,13 @@ app.get('/api/groups', authenticateToken, async (req, res) => {
     const pool = getPool();
     // Fetch all groups where the user is a member
     const [groups] = await pool.query(`
-      SELECT g.*, TRUE as isGroup
+      SELECT g.*, TRUE as isGroup, IF(pg.user_id IS NOT NULL, TRUE, FALSE) AS is_pinned
       FROM \`groups\` g
       JOIN group_members gm ON g.id = gm.group_id
+      LEFT JOIN pinned_groups pg ON pg.group_id = g.id AND pg.user_id = ?
       WHERE gm.user_id = ?
       ORDER BY g.created_at DESC
-    `, [req.user.id]);
+    `, [req.user.id, req.user.id]);
 
     // For each group, fetch members
     for (const group of groups) {

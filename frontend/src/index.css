@@ -1531,16 +1531,78 @@ body {
 
   /* Context Menu as Bottom Sheet */
   .context-menu-overlay {
-    align-items: flex-end;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center; /* Horizontally center the reaction bar and context menu sheet */
+    padding-bottom: 0;
   }
 
   .context-menu {
     width: 100%;
     max-width: 100%;
+    max-height: 42dvh;
+    overflow-y: auto;
     border-radius: 24px 24px 0 0;
     animation: bottomSheetSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     border: none;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .reaction-bar {
+    width: 90% !important;
+    max-width: 320px !important;
+    margin-bottom: 8px !important;
+    padding: 8px 12px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6) !important;
+  }
+
+  .context-item {
+    padding: 12px 20px !important;
+    font-size: 0.95rem !important;
+  }
+
+  /* Prevent highlighted message from overlapping or going off-screen on mobile */
+  .messages-container {
+    scroll-padding-top: 20px !important;
+  }
+
+  .message-wrapper.context-active {
+    z-index: 1001 !important;
+    max-width: 85% !important; /* expand slightly for readable view when active */
+  }
+
+  .message-wrapper.context-active .message-bubble {
+    max-height: 28dvh !important;
+    overflow-y: auto !important;
+    border: 1px solid rgba(139, 92, 246, 0.4) !important;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4) !important;
+    transform: scale(1.02) !important;
+    
+    /* Custom premium scrollbar for context-active message bubble */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139, 92, 246, 0.5) transparent;
+  }
+
+  .message-wrapper.context-active .message-bubble::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .message-wrapper.context-active .message-bubble::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .message-wrapper.context-active .message-bubble::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.5);
+    border-radius: 4px;
+  }
+
+  /* Temporary bottom spacer to allow messages (even the last one) to scroll above the bottom sheet menu */
+  .mobile-context-spacer {
+    height: 50vh !important;
+    width: 100%;
+    flex-shrink: 0 !important;
   }
 
   .forward-modal {

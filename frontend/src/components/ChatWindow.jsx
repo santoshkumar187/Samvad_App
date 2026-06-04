@@ -295,9 +295,20 @@ export default function ChatWindow({
     }
   };
 
+  const triggerMessageMenu = (msg) => {
+    setActiveMessageMenu(msg);
+    setTimeout(() => {
+      const el = document.getElementById(`msg-${msg.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 150);
+  };
+
   const handleLongPress = (msg) => {
-    setActiveMessageMenu(msg)
+    triggerMessageMenu(msg);
   }
+
 
   const themes = [
     { id: 'default', name: 'Signal Black', class: 'theme-default' },
@@ -865,7 +876,7 @@ export default function ChatWindow({
               className={`message-wrapper ${isSender ? 'sent' : 'received'} ${activeMessageMenu?.id === msg.id ? 'context-active' : ''}`}
               onContextMenu={(e) => {
                 e.preventDefault();
-                setActiveMessageMenu(msg);
+                triggerMessageMenu(msg);
               }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -1009,6 +1020,7 @@ export default function ChatWindow({
             </div>
           </div>
         )}
+        {activeMessageMenu && <div className="mobile-context-spacer" />}
       </div>
 
       {activeMessageMenu && (

@@ -897,10 +897,7 @@ function App() {
           <div className="login-header">
             <h1 className="brand-title">Samvad App</h1>
             <div className="app-logo">
-              <div className="css-chat-bubble">
-                <MdCall className="bubble-icon" />
-                <div className="bubble-tail"></div>
-              </div>
+              <img src="/icons/icon-192.png" alt="Samvad App Logo" className="logo-image" />
             </div>
             <h2>{isLoginMode ? 'Welcome Back' : 'Create Account'}</h2>
             <p className="subtitle">{isLoginMode ? 'Enter your details to continue chatting' : 'Join our secure messaging platform'}</p>

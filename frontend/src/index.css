@@ -1020,41 +1020,34 @@ body {
 }
 
 .app-logo {
-  margin-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
   display: flex;
   justify-content: center;
-}
-
-.css-chat-bubble {
-  width: 90px;
-  height: 80px;
-  background: #8b5cf6;
-  border-radius: 24px;
-  position: relative;
-  display: flex;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  position: relative;
 }
 
-.bubble-icon {
-  color: white;
-  font-size: 2.8rem;
-  z-index: 2;
+.logo-image {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.45));
+  animation: logoFloatAndPulse 4s ease-in-out infinite;
 }
 
-.bubble-tail {
-  position: absolute;
-  bottom: -10px;
-  left: 20px;
-  width: 20px;
-  height: 20px;
-  background: #8b5cf6;
-  clip-path: polygon(0 0, 100% 0, 0 100%); /* Tail pointing down-left */
-}
-
-@keyframes logoFloat {
-  /* Animation removed as requested */
+@keyframes logoFloatAndPulse {
+  0% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.45));
+  }
+  50% {
+    transform: translateY(-8px) scale(1.03);
+    filter: drop-shadow(0 0 25px rgba(139, 92, 246, 0.7));
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.45));
+  }
 }
 
 

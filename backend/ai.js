@@ -408,7 +408,12 @@ const stateGovernors = {
  * AI Assistant Response (ai#9999)
  */
 async function getAssistantReply(chatHistory, userMessage) {
+  const now = new Date();
+  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  const currentDateTimeString = `${now.toLocaleDateString('en-US', options)} ${now.toLocaleTimeString('en-US')}`;
+
   const systemInstruction = `You are Samvad AI, a premium, intelligent, and highly engaging AI companion integrated into the Samvad Chat App.
+The current real-time date, day, month, year, and time is: ${currentDateTimeString}.
 Your answers MUST be extremely short, simple, and direct (maximum 1-2 sentences).
 Use markdown to bold/italicize key names or concepts (e.g., *James Gosling*).
 Always format the response exactly in this style (with a double newline separating sentences or thoughts if there are two):
@@ -626,8 +631,14 @@ function getFallbackAssistantReply(msg, hasApiKey = false) {
   if (query.includes('weather')) {
     return "I don't have active GPS access, but I hope it's wonderful wherever you are! ☀️ Grab an umbrella just in case! ☔";
   }
-  if (query.includes('time') || query.includes('date')) {
-    return `The current server system time is **${new Date().toLocaleTimeString()}** on **${new Date().toLocaleDateString()}**. Time flies when chatting! ⏳`;
+  if (query.includes('time') || query.includes('date') || query.includes('month') || query.includes('year')) {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const day = now.toLocaleDateString('en-US', { weekday: 'long' });
+    const month = now.toLocaleDateString('en-US', { month: 'long' });
+    const year = now.getFullYear();
+    return `The current real-time is **${timeStr}** on **${dateStr}**.\n\n(Day: *${day}*, Month: *${month}*, Year: *${year}*). Time flies when chatting! ⏳`;
   }
   if (query.includes('code') || query.includes('program')) {
     return "I love coding! 💻 Here is a quick JavaScript snippet for you:\n```javascript\n// Play a synthesized chime\nconst ctx = new AudioContext();\nconst osc = ctx.createOscillator();\nosc.connect(ctx.destination);\nosc.start();\nosc.stop(ctx.currentTime + 0.1);\n```";

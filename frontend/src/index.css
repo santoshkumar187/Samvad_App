@@ -1031,23 +1031,7 @@ body {
   width: 96px;
   height: 96px;
   object-fit: contain;
-  filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.45));
-  animation: logoFloatAndPulse 4s ease-in-out infinite;
-}
-
-@keyframes logoFloatAndPulse {
-  0% {
-    transform: translateY(0) scale(1);
-    filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.45));
-  }
-  50% {
-    transform: translateY(-8px) scale(1.03);
-    filter: drop-shadow(0 0 25px rgba(139, 92, 246, 0.7));
-  }
-  100% {
-    transform: translateY(0) scale(1);
-    filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.45));
-  }
+  filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.55));
 }
 
 

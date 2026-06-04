@@ -12,6 +12,11 @@ if ('serviceWorker' in navigator) {
   }).catch(err => console.warn('Service worker unregistration failed:', err));
 }
 
+// Block pinch-to-zoom gestures on mobile Safari
+document.addEventListener('gesturestart', (e) => {
+  e.preventDefault();
+});
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

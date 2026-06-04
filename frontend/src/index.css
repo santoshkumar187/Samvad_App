@@ -34,6 +34,8 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 #root {
@@ -44,6 +46,8 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 /* Main app container */

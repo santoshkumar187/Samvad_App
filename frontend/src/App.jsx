@@ -242,6 +242,16 @@ function App() {
   const [selectedUser, setSelectedUser] = useState(null)
   const [users, setUsers] = useState([])
   const [messages, setMessages] = useState([])
+  const [isBlocked, setIsBlocked] = useState(false)
+  
+  useEffect(() => {
+    if (!selectedUser) {
+      setIsBlocked(false);
+      return;
+    }
+    const chatKey = selectedUser.isGroup ? `group_${selectedUser.id}` : `user_${selectedUser.id}`;
+    setIsBlocked(localStorage.getItem(`samvad_blocked_${chatKey}`) === 'true');
+  }, [selectedUser]);
   
   const [replyingTo, setReplyingTo] = useState(null)
   const [forwardingMessage, setForwardingMessage] = useState(null)
@@ -1051,15 +1061,29 @@ function App() {
             setUsers(prev => prev.filter(u => !(u.isGroup && u.id === groupId)));
             setSelectedUser(null);
           }}
+          isBlocked={isBlocked}
+          onToggleBlock={() => {
+            if (!selectedUser) return;
+            const chatKey = selectedUser.isGroup ? `group_${selectedUser.id}` : `user_${selectedUser.id}`;
+            const nextBlocked = !isBlocked;
+            localStorage.setItem(`samvad_blocked_${chatKey}`, String(nextBlocked));
+            setIsBlocked(nextBlocked);
+          }}
         />
         {selectedUser && (
-          <MessageInput 
-            onSendMessage={handleSendMessage} 
-            serverUrl={SERVER_URL} 
-            replyingTo={replyingTo}
-            onCancelReply={() => setReplyingTo(null)}
-            onTyping={handleTyping}
-          />
+          isBlocked ? (
+            <div style={{ padding: '16px', textAlign: 'center', background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', fontWeight: '600', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: '0.95rem' }}>
+              You have blocked this contact. Tap their name/avatar to unblock.
+            </div>
+          ) : (
+            <MessageInput 
+              onSendMessage={handleSendMessage} 
+              serverUrl={SERVER_URL} 
+              replyingTo={replyingTo}
+              onCancelReply={() => setReplyingTo(null)}
+              onTyping={handleTyping}
+            />
+          )
         )}
       </div>
 

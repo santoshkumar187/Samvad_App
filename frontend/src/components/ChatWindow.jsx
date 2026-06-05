@@ -1380,13 +1380,13 @@ export default function ChatWindow({
                 </div>
 
                 <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
-                  <div className="context-item" onClick={handleShareContact} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)' }}>
+                  <div className="context-item" onClick={handleShareContact} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', borderBottom: 'none' }}>
                     <MdShare /> Share Contact
                   </div>
 
                   {selectedUser.isGroup && currentUser && selectedUser.creator_id === currentUser.id && (
                     <>
-                      <div className="context-item" onClick={() => setIsEditingGroupName(!isEditingGroupName)} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)' }}>
+                      <div className="context-item" onClick={() => setIsEditingGroupName(!isEditingGroupName)} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', borderBottom: 'none' }}>
                         <MdEdit /> {isEditingGroupName ? 'Cancel Edit' : 'Edit Group Name'}
                       </div>
 
@@ -1411,35 +1411,35 @@ export default function ChatWindow({
                     </>
                   )}
 
-                  <div className="context-item" onClick={handleToggleMute} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)' }}>
+                  <div className="context-item" onClick={handleToggleMute} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', borderBottom: 'none' }}>
                     {isMuted ? <MdNotifications /> : <MdNotificationsOff />} {isMuted ? 'Unmute Notifications' : 'Mute Notifications'}
                   </div>
 
                   {!selectedUser.isGroup && (
-                    <div className="context-item delete" onClick={onToggleBlock} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.05)' }}>
+                    <div className="context-item delete" onClick={onToggleBlock} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.05)', borderBottom: 'none' }}>
                       <MdBlock /> {isBlocked ? 'Unblock Contact' : 'Block Contact'}
                     </div>
                   )}
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px', width: '100%' }}>
                     <button
                       className="social-btn"
                       onClick={() => setInfoModalTab('media')}
-                      style={{ fontSize: '0.8rem', padding: '10px 5px', display: 'flex', flexDirection: 'column', gap: '5px' }}
+                      style={{ fontSize: '0.8rem', padding: '10px 5px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
                     >
                       <MdPhotoLibrary size={18} /> Media ({messages.filter(m => m.type === 'image' || m.type === 'video').length})
                     </button>
                     <button
                       className="social-btn"
                       onClick={() => setInfoModalTab('links')}
-                      style={{ fontSize: '0.8rem', padding: '10px 5px', display: 'flex', flexDirection: 'column', gap: '5px' }}
+                      style={{ fontSize: '0.8rem', padding: '10px 5px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
                     >
                       <MdLink size={18} /> Links ({messages.filter(m => m.type === 'text' && /(https?:\/\/[^\s]+)/g.test(m.content)).length})
                     </button>
                     <button
                       className="social-btn"
                       onClick={() => setInfoModalTab('docs')}
-                      style={{ fontSize: '0.8rem', padding: '10px 5px', display: 'flex', flexDirection: 'column', gap: '5px' }}
+                      style={{ fontSize: '0.8rem', padding: '10px 5px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
                     >
                       <MdInsertDriveFile size={18} /> Docs ({messages.filter(m => m.type === 'file').length})
                     </button>

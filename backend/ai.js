@@ -707,9 +707,12 @@ Always format your response with two distinct sections:
 1. "Thoughts: [A brief, interesting 1-sentence thought process detailing your reasoning or context, up to June 2026]"
 2. "Reply: [Your actual response to the user]"
 
-Do NOT use asterisks (*) or double asterisks (**) in your formatting. Respond in clean, plain text.
-Always format the response with a double newline separating sentences or sections.
-Avoid long paragraphs, verbose explanations, or conversational introductions/outros.`;
+Formatting Rules for "Reply":
+- Ensure the layout is clean, highly structured, and easy to read.
+- Use paragraphs separated by a double newline (\\n\\n) for readability.
+- When listing features, steps, recommendations, or options, use a clear points-wise format (using bullet points like '• ' or emojis, or numbered lists like '1. ', '2. ').
+- Do NOT use asterisks (*) or double asterisks (**) in your formatting. Do not use any markdown bold/italics that involve asterisks. Respond in clean, plain text.
+- Avoid cluttered text walls. Maintain clean, spacing-enriched formatting.`;
 
   // Build context prompt
   let prompt = '';

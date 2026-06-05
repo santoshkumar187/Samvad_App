@@ -805,6 +805,49 @@ app.delete('/api/groups/:groupId', authenticateToken, async (req, res) => {
   }
 });
 
+app.put('/api/groups/:groupId', authenticateToken, async (req, res) => {
+  const { groupId } = req.params;
+  const { name } = req.body;
+  const userId = req.user.id;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Group name is required' });
+  }
+
+  try {
+    const pool = getPool();
+    // Check if the group exists and the user is the creator
+    const [groupRows] = await pool.query('SELECT creator_id FROM `groups` WHERE id = ?', [groupId]);
+    if (groupRows.length === 0) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const group = groupRows[0];
+    if (group.creator_id !== userId) {
+      return res.status(403).json({ error: 'Only the group creator can edit the group details' });
+    }
+
+    await pool.query('UPDATE `groups` SET name = ? WHERE id = ?', [name.trim(), groupId]);
+
+    // Fetch all members of this group to notify them via socket
+    const [members] = await pool.query('SELECT user_id FROM group_members WHERE group_id = ?', [groupId]);
+    const memberIds = members.map(m => m.user_id);
+
+    // Broadcast socket event to all members of the group
+    memberIds.forEach(mId => {
+      const socketId = connectedUsers.get(mId);
+      if (socketId) {
+        io.to(socketId).emit('group_updated', { groupId: parseInt(groupId), name: name.trim() });
+      }
+    });
+
+    res.json({ message: 'Group updated successfully', name: name.trim() });
+  } catch (error) {
+    console.error('Failed to update group:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.get('/api/messages/group/:groupId', authenticateToken, async (req, res) => {
   const { groupId } = req.params;
   const beforeId = req.query.beforeId ? parseInt(req.query.beforeId) : null;

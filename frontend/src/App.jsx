@@ -539,6 +539,16 @@ function App() {
       });
     });
 
+    socketInstance.on('group_updated', ({ groupId, name }) => {
+      setUsers(prev => prev.map(u => (u.isGroup && u.id === groupId) ? { ...u, name } : u));
+      setSelectedUser(prev => {
+        if (prev && prev.isGroup && prev.id === groupId) {
+          return { ...prev, name };
+        }
+        return prev;
+      });
+    });
+
     socketInstance.on('messages_read', ({ receiver_id }) => {
       setMessages(prev => prev.map(m => m.receiver_id === receiver_id ? { ...m, status: 'read' } : m))
     })

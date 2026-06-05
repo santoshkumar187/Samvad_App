@@ -165,9 +165,8 @@ export default function ChatWindow({
   const [showContactInfoModal, setShowContactInfoModal] = useState(false);
   const [infoModalTab, setInfoModalTab] = useState('actions'); // 'actions' | 'media' | 'links' | 'docs'
   const [isMuted, setIsMuted] = useState(false);
-  const [contactNickname, setContactNickname] = useState('');
-  const [isEditingNickname, setIsEditingNickname] = useState(false);
-  const [nicknameInput, setNicknameInput] = useState('');
+  const [isEditingGroupName, setIsEditingGroupName] = useState(false);
+  const [groupNameInput, setGroupNameInput] = useState('');
 
   useEffect(() => {
     if (!selectedUser) return;
@@ -177,15 +176,13 @@ export default function ChatWindow({
     setChatTheme(savedTheme);
     setCustomWallpaperUrl(savedWallpaper);
 
-    // Mute & Nickname
+    // Mute & Group Name editing init
     const savedMuted = localStorage.getItem(`samvad_muted_${chatKey}`) === 'true';
-    const savedNickname = localStorage.getItem(`samvad_nickname_${chatKey}`) || '';
     setIsMuted(savedMuted);
-    setContactNickname(savedNickname);
-    setNicknameInput(savedNickname);
     setShowContactInfoModal(false);
     setInfoModalTab('actions');
-    setIsEditingNickname(false);
+    setIsEditingGroupName(false);
+    setGroupNameInput(selectedUser.isGroup ? selectedUser.name : '');
   }, [selectedUser]);
 
   const handleToggleMute = () => {
@@ -196,12 +193,19 @@ export default function ChatWindow({
     setIsMuted(nextMuted);
   };
 
-  const handleSaveNickname = () => {
-    if (!selectedUser) return;
-    const chatKey = selectedUser.isGroup ? `group_${selectedUser.id}` : `user_${selectedUser.id}`;
-    localStorage.setItem(`samvad_nickname_${chatKey}`, nicknameInput.trim());
-    setContactNickname(nicknameInput.trim());
-    setIsEditingNickname(false);
+  const handleSaveGroupName = async () => {
+    if (!selectedUser || !groupNameInput.trim()) return;
+    try {
+      await axios.put(`${serverUrl}/api/groups/${selectedUser.id}`, {
+        name: groupNameInput.trim()
+      });
+      alert('Group name updated successfully!');
+      selectedUser.name = groupNameInput.trim();
+      setIsEditingGroupName(false);
+    } catch (err) {
+      console.error('Failed to update group name:', err);
+      alert(err.response?.data?.error || 'Failed to update group name');
+    }
   };
 
   const handleShareContact = () => {
@@ -764,7 +768,7 @@ export default function ChatWindow({
         </div>
         <div className="chat-header-info" onClick={() => setShowContactInfoModal(true)} style={{ cursor: 'pointer' }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {contactNickname ? contactNickname : (selectedUser.isGroup ? selectedUser.name : selectedUser.username)}
+            {selectedUser.isGroup ? selectedUser.name : selectedUser.username}
             {isMuted && <MdNotificationsOff size={14} style={{ color: '#ff4b4b' }} />}
             {isBlocked && <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 'bold' }}>(Blocked)</span>}
           </h3>
@@ -1332,7 +1336,7 @@ export default function ChatWindow({
       {/* Contact Details Modal */}
       {showContactInfoModal && (
         <div className="context-menu-overlay" style={{ zIndex: 99999 }} onClick={() => setShowContactInfoModal(false)}>
-          <div className="forward-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', width: '90%', padding: '20px' }}>
+          <div className="contact-details-modal" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '10px', marginBottom: '15px' }}>
               <h3 style={{ margin: 0 }}>Contact Details</h3>
               <MdClose size={24} style={{ cursor: 'pointer' }} onClick={() => setShowContactInfoModal(false)} />
@@ -1368,7 +1372,7 @@ export default function ChatWindow({
 
                 <div style={{ textAlign: 'center' }}>
                   <h2 style={{ fontSize: '1.4rem', fontWeight: 'bold', margin: '5px 0' }}>
-                    {contactNickname ? `${contactNickname} (${selectedUser.isGroup ? selectedUser.name : selectedUser.username})` : (selectedUser.isGroup ? selectedUser.name : selectedUser.username)}
+                    {selectedUser.isGroup ? selectedUser.name : selectedUser.username}
                   </h2>
                   <p style={{ color: 'var(--signal-text-muted)', fontSize: '0.85rem', margin: 0 }}>
                     {selectedUser.isGroup ? 'Group Chat' : `samvadId: ${selectedUser.samvad_id}`}
@@ -1380,27 +1384,31 @@ export default function ChatWindow({
                     <MdShare /> Share Contact
                   </div>
 
-                  <div className="context-item" onClick={() => setIsEditingNickname(!isEditingNickname)} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)' }}>
-                    <MdEdit /> {isEditingNickname ? 'Cancel Edit' : 'Edit Nickname'}
-                  </div>
+                  {selectedUser.isGroup && currentUser && selectedUser.creator_id === currentUser.id && (
+                    <>
+                      <div className="context-item" onClick={() => setIsEditingGroupName(!isEditingGroupName)} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)' }}>
+                        <MdEdit /> {isEditingGroupName ? 'Cancel Edit' : 'Edit Group Name'}
+                      </div>
 
-                  {isEditingNickname && (
-                    <div style={{ display: 'flex', gap: '8px', padding: '0 5px' }}>
-                      <input
-                        type="text"
-                        placeholder="Enter nickname..."
-                        value={nicknameInput}
-                        onChange={e => setNicknameInput(e.target.value)}
-                        style={{ padding: '8px 12px', fontSize: '0.9rem', flex: 1, background: '#121212', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px' }}
-                      />
-                      <button
-                        className="primary-btn"
-                        onClick={handleSaveNickname}
-                        style={{ padding: '8px 15px', fontSize: '0.85rem', width: 'auto', marginTop: 0 }}
-                      >
-                        Save
-                      </button>
-                    </div>
+                      {isEditingGroupName && (
+                        <div style={{ display: 'flex', gap: '8px', padding: '0 5px', width: '100%' }}>
+                          <input
+                            type="text"
+                            placeholder="Enter group name..."
+                            value={groupNameInput}
+                            onChange={e => setGroupNameInput(e.target.value)}
+                            style={{ padding: '8px 12px', fontSize: '0.9rem', flex: 1, background: '#121212', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px' }}
+                          />
+                          <button
+                            className="primary-btn"
+                            onClick={handleSaveGroupName}
+                            style={{ padding: '8px 15px', fontSize: '0.85rem', width: 'auto', marginTop: 0 }}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   <div className="context-item" onClick={handleToggleMute} style={{ padding: '12px 15px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)' }}>

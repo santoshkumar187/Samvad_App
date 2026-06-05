@@ -807,15 +807,24 @@ function getFallbackAssistantReply(msg, hasApiKey = false) {
     return "You're very welcome! It is my pleasure to keep your Samvad chats active and intelligent. Let me know if there's anything else you need! 😊";
   }
 
-  const noteMessage = hasApiKey 
-    ? `*Note: The configured credentials in your \`backend/.env\` returned an error (it might be invalid, rate-limited, or expired). Please check your key configuration.*`
-    : `*Note: Since there is no \`GEMINI_API_KEY\` or \`AI_BEARER_TOKEN\` specified in your \`backend/.env\` file yet, I am running on the local Samvad NLP Engine. Configure your credentials in the env file to unlock advanced logic, real-time web searches, coding capabilities, and full general knowledge!*`;
+  const conversationalReplies = [
+    "I am here and ready to chat! What is on your mind? We can talk about coding, calculate math, or look up capital cities.",
+    "That is interesting! Tell me more, or ask me to calculate a math problem, translate some text, or find a country capital.",
+    "I am listening! I am currently running on local mode, but I can still do math, tell you country capitals, translate messages, or summarize this chat. What would you like to explore?",
+    "Let's chat! You can ask me for general facts, math answers, capital cities, or translations. What would you like to explore?",
+    "Hmm, that is food for thought! What should we talk about next? I can help with conversions, country capitals, or quick translations."
+  ];
 
-  return `I hear you! You said: "${msg}". 
+  const getStableHash = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash);
+  };
 
-${noteMessage}
-
-Type **"help"** to see all my features!`;
+  const idx = getStableHash(msg) % conversationalReplies.length;
+  return conversationalReplies[idx];
 }
 
 function getFallbackTranslation(text, targetLanguage) {

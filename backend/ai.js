@@ -521,7 +521,8 @@ Key context for June 2026:
 - AI integration in communication apps (like Samvad) is standard.
 
 Formatting Rules:
-- Respond naturally and conversationally, using standard markdown formatting (such as bullet points, numbered lists, and bold text with asterisks \`*\` or \`**\`) to make your answers structured and easy to read.
+- Respond naturally in a clean, point-wise structure (using bullet points like '•' or numbered lists like '1.', '2.') to organize information professionally.
+- Do NOT use asterisks (*) or double asterisks (**) in your response. Do not use any markdown bold/italics that involve asterisks. Respond in clean, plain text.
 - Do NOT output any standard AI disclaimers, warnings, notes, or messages regarding your knowledge cutoff (e.g., do not say "Please note that my knowledge cutoff is...").
 - Do NOT add conversational follow-up questions at the end of your response (e.g., do not ask "Would you like to know more...").
 - Keep your answers clean, well-formatted, direct, and helpful.`;
@@ -539,11 +540,11 @@ Formatting Rules:
 
   try {
     const response = await callAI(prompt, systemInstruction);
-    return response;
+    return response.replace(/\*/g, '');
   } catch (error) {
     console.error('[AI] API Error details:', error.response?.data || error.message || error);
     console.log('[AI] API error or missing key, using smart fallback logic.');
-    return getFallbackAssistantReply(userMessage, fileUrl, fileType);
+    return getFallbackAssistantReply(userMessage, fileUrl, fileType).replace(/\*/g, '');
   }
 }
 

@@ -1141,22 +1141,25 @@ io.on('connection', (socket) => {
         // Trigger simulated typing indicator from the AI assistant
         socket.emit('user_typing', { userId: aiId });
 
-        // Retrieve last 5 messages for context
+        // Retrieve last 5 messages for context (joining with users for rich sender_name ORM mapping)
         const [historyRows] = await pool.query(`
-          SELECT sender_id, content FROM messages 
-          WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-          ORDER BY timestamp DESC LIMIT 6
+          SELECT m.sender_id, m.content, u.username as sender_name 
+          FROM messages m
+          LEFT JOIN users u ON m.sender_id = u.id
+          WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
+          ORDER BY m.timestamp DESC LIMIT 6
         `, [data.sender_id, aiId, aiId, data.sender_id]);
 
         const history = historyRows.reverse().map(m => ({
           is_ai: Number(m.sender_id) === Number(aiId),
+          sender_name: m.sender_name,
           content: m.content
         }));
 
         // Generate response with natural 1-1.5s delay
         setTimeout(async () => {
           try {
-            const replyText = await getAssistantReply(history, data.content);
+            const replyText = await getAssistantReply(history, data.content, data.file_url, data.type);
             
             // Insert AI message into database
             const [aiResult] = await pool.query(

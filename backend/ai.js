@@ -129,6 +129,40 @@ async function callGemini(prompt, systemInstruction = '') {
   throw new Error('INVALID_GEMINI_RESPONSE');
 }
 
+async function callGeminiVision(prompt, mimeType, base64Data, systemInstruction = '') {
+  if (!GEMINI_API_KEY) throw new Error('NO_GEMINI_KEY');
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const payload = {
+    contents: [
+      {
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Data
+            }
+          }
+        ]
+      }
+    ]
+  };
+  if (systemInstruction) {
+    payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+  }
+
+  const response = await axios.post(url, payload, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 25000
+  });
+
+  if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+    return response.data.candidates[0].content.parts[0].text.trim();
+  }
+  throw new Error('INVALID_GEMINI_RESPONSE');
+}
+
 /**
  * Call Hugging Face Router API (OpenAI-compatible serverless endpoints)
  */
@@ -559,11 +593,102 @@ The road route connects ${originDisp} and ${destDisp} via local highways. Drivin
 Planning a trip between the two?`;
 }
 
-async function getAssistantReply(chatHistory, userMessage) {
-  // Check distance query first
+function resolveSongRecommendation(msg) {
+  const query = msg.toLowerCase().trim();
+  const wantsSongs = query.includes('song') || query.includes('music') || query.includes('recommend') || query.includes('suggest') || query.includes('playlist');
+  if (!wantsSongs) return null;
+
+  // Determine mood/genre
+  let mood = 'chill';
+  if (query.includes('sad') || query.includes('melancholy') || query.includes('cry')) mood = 'sad';
+  else if (query.includes('happy') || query.includes('upbeat') || query.includes('dance')) mood = 'happy';
+  else if (query.includes('code') || query.includes('coding') || query.includes('study') || query.includes('focus') || query.includes('work')) mood = 'focus';
+  else if (query.includes('workout') || query.includes('gym') || query.includes('run') || query.includes('energy') || query.includes('energetic')) mood = 'energetic';
+  else if (query.includes('love') || query.includes('romance') || query.includes('romantic')) mood = 'romantic';
+
+  const recommendations = {
+    chill: [
+      { title: "Sunflower", artist: "Post Malone & Swae Lee", year: "2018", vibe: "Chill acoustic/pop vibes, perfect for relaxing." },
+      { title: "Nightcall", artist: "Kavinsky", year: "2010", vibe: "Synthwave masterpiece, perfect for night drives." },
+      { title: "Get Lucky", artist: "Daft Punk", year: "2013", vibe: "Funky, smooth, and endlessly catch-y." }
+    ],
+    sad: [
+      { title: "Someone Like You", artist: "Adele", year: "2011", vibe: "Heart-wrenching piano ballad about lost love." },
+      { title: "Lovely", artist: "Billie Eilish & Khalid", year: "2018", vibe: "Haunting vocals with gorgeous violin arrangements." },
+      { title: "Fix You", artist: "Coldplay", year: "2005", vibe: "Emotional build-up that brings hope in dark times." }
+    ],
+    happy: [
+      { title: "Can't Stop the Feeling!", artist: "Justin Timberlake", year: "2016", vibe: "High-energy, danceable pop anthem." },
+      { title: "Levitating", artist: "Dua Lipa", year: "2020", vibe: "Retro-disco upbeat groove, instant mood lifter." },
+      { title: "Happy", artist: "Pharrell Williams", year: "2013", vibe: "Clap-along, feel-good rhythm that's impossible to ignore." }
+    ],
+    focus: [
+      { title: "Resonance", artist: "Home", year: "2014", vibe: "Chillwave synth track, excellent for focus and coding." },
+      { title: "Weightless", artist: "Marconi Union", year: "2011", vibe: "Ambient soundscape designed to reduce anxiety." },
+      { title: "Intro", artist: "The xx", year: "2009", vibe: "Minimalist, repetitive guitar and beat, great coding loop." }
+    ],
+    energetic: [
+      { title: "Blinding Lights", artist: "The Weeknd", year: "2019", vibe: "80s synth-pop powerhouse, great for running." },
+      { title: "Lose Yourself", artist: "Eminem", year: "2002", vibe: "Hard-hitting rap track to get you pumped up." },
+      { title: "Till I Collapse", artist: "Eminem", year: "2002", vibe: "The ultimate workout motivation anthem." }
+    ],
+    romantic: [
+      { title: "Perfect", artist: "Ed Sheeran", year: "2017", vibe: "Classic slow-dance wedding ballad." },
+      { title: "Die With A Smile", artist: "Bruno Mars & Lady Gaga", year: "2024", vibe: "Duet with soaring vocals and retro production." },
+      { title: "As It Was", artist: "Harry Styles", year: "2022", vibe: "Upbeat indie-pop track about longing and love." }
+    ]
+  };
+
+  const selected = recommendations[mood];
+  let resText = `Here are some high-fidelity song suggestions matching your ${mood} mood:\n\n`;
+  selected.forEach(s => {
+    resText += `🎵 ${s.title} by ${s.artist} (${s.year})\n  Vibe: ${s.vibe}\n\n`;
+  });
+  return resText;
+}
+
+async function getAssistantReply(chatHistory, userMessage, fileUrl = null, fileType = null) {
+  // Check image OCR first
+  if (fileType === 'image' && fileUrl) {
+    try {
+      console.log('[AI] Starting OCR on image:', fileUrl);
+      const resImg = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+      const mimeType = resImg.headers['content-type'] || 'image/jpeg';
+      const base64 = Buffer.from(resImg.data).toString('base64');
+      
+      const ocrPrompt = "Extract all readable text from this image. Output ONLY the extracted text. If there is no text, say 'No text found'.";
+      let ocrResult = "No text found";
+      
+      if (GEMINI_API_KEY) {
+        ocrResult = await callGeminiVision(ocrPrompt, mimeType, base64);
+      } else {
+        const path = require('path');
+        ocrResult = `[Local OCR Engine] Detected an image but require a configured Gemini API key to extract full high-fidelity text. Filename: ${path.basename(fileUrl)}`;
+      }
+      
+      const thoughts = `Thoughts: The user sent an image. I will extract all readable text from it using the Gemini vision capabilities.`;
+      const reply = `Reply: Extracted text from the image:\n\n${ocrResult}`;
+      return `${thoughts}\n\n${reply}`.replace(/\*/g, '');
+    } catch (err) {
+      console.error('[AI] OCR failed:', err.message);
+      return `Thoughts: The user sent an image, but text extraction failed due to an error: ${err.message}.\n\nReply: Sorry, I couldn't extract text from this image. Please try again.`.replace(/\*/g, '');
+    }
+  }
+
+  // Check distance query
   const distanceResponse = resolveDistanceQuery(userMessage);
   if (distanceResponse) {
-    return distanceResponse.replace(/\*/g, '');
+    const thoughts = `Thoughts: The user is asking for the distance between locations. I will retrieve the road and air routes.`;
+    const reply = `Reply: ${distanceResponse}`;
+    return `${thoughts}\n\n${reply}`.replace(/\*/g, '');
+  }
+
+  // Check song recommendation
+  const songResponse = resolveSongRecommendation(userMessage);
+  if (songResponse) {
+    const thoughts = `Thoughts: The user wants song recommendations. I will suggest some top songs based on the mood.`;
+    const reply = `Reply: ${songResponse}`;
+    return `${thoughts}\n\n${reply}`.replace(/\*/g, '');
   }
 
   const now = new Date();
@@ -572,15 +697,24 @@ async function getAssistantReply(chatHistory, userMessage) {
 
   const systemInstruction = `You are Samvad AI, a premium, intelligent, and highly engaging AI companion integrated into the Samvad Chat App.
 The current real-time date, day, month, year, and time is: ${currentDateTimeString}.
-Your answers MUST be extremely short, simple, and direct (maximum 1-2 sentences).
-Do NOT use asterisks (*) or double asterisks (**) in your formatting. Do not use any markdown bold/italics that involve asterisks. Respond in clean, plain text.
-Always format the response with a double newline separating sentences or thoughts if there are two.
-Avoid long paragraphs, verbose explanations, or conversational introductions/outros. Output ONLY the direct answer.`;
+You are updated with knowledge up to June 2026. The present year is 2026.
+Key context for June 2026:
+- The FIFA World Cup 2026 starts on June 11, 2026, hosted by Canada, Mexico, and the USA.
+- Space exploration is reaching new heights with NASA's Artemis III crewed lunar landing prep.
+- AI integration in communication apps (like Samvad) is standard.
+
+Always format your response with two distinct sections:
+1. "Thoughts: [A brief, interesting 1-sentence thought process detailing your reasoning or context, up to June 2026]"
+2. "Reply: [Your actual response to the user]"
+
+Do NOT use asterisks (*) or double asterisks (**) in your formatting. Respond in clean, plain text.
+Always format the response with a double newline separating sentences or sections.
+Avoid long paragraphs, verbose explanations, or conversational introductions/outros.`;
 
   // Build context prompt
   let prompt = '';
   if (chatHistory && chatHistory.length > 0) {
-    prompt += "Previous conversation history:\n";
+    prompt += "Previous conversation history (retrieved from database ORM):\n";
     chatHistory.forEach(msg => {
       prompt += `${msg.sender_name || (msg.is_ai ? 'Samvad AI' : 'User')}: ${msg.content}\n`;
     });
@@ -594,7 +728,7 @@ Avoid long paragraphs, verbose explanations, or conversational introductions/out
   } catch (error) {
     console.error('[AI] API Error details:', error.response?.data || error.message || error);
     console.log('[AI] API error or missing key, using smart fallback logic.');
-    return getFallbackAssistantReply(userMessage, true).replace(/\*/g, '');
+    return getFallbackAssistantReply(userMessage, fileUrl, fileType).replace(/\*/g, '');
   }
 }
 
@@ -676,15 +810,35 @@ ${chatHistory.map(m => `${m.sender}: ${m.content}`).join('\n')}`;
    Fallback Implementations
    ───────────────────────────────────────────────────────────────── */
 
-function getFallbackAssistantReply(msg, hasApiKey = false) {
+function getFallbackAssistantReply(msg, fileUrl = null, fileType = null) {
+  // Check if we are doing OCR
+  if (fileType === 'image' && fileUrl) {
+    const path = require('path');
+    const filename = path.basename(fileUrl);
+    const thoughts = `Thoughts: The user sent an image. I need to run text extraction, but the API is offline. I will prompt the user to configure the API key.`;
+    const reply = `Reply: [Local OCR Engine] Detected an image but require a configured Gemini API key to extract full high-fidelity text. Filename: ${filename}`;
+    return `${thoughts}\n\n${reply}`;
+  }
+
+  // Check distance query
   const distanceResponse = resolveDistanceQuery(msg);
   if (distanceResponse) {
-    return distanceResponse.replace(/\*/g, '');
+    const thoughts = `Thoughts: The user is asking for the distance between locations. I will compute the road and air routes.`;
+    const reply = `Reply: ${distanceResponse.replace(/\*/g, '')}`;
+    return `${thoughts}\n\n${reply}`;
+  }
+
+  // Check song recommendation
+  const songResponse = resolveSongRecommendation(msg);
+  if (songResponse) {
+    const thoughts = `Thoughts: The user wants song recommendations. I will suggest some top songs based on the mood.`;
+    const reply = `Reply: ${songResponse}`;
+    return `${thoughts}\n\n${reply}`;
   }
 
   const query = msg.toLowerCase().trim().replace(/[?.]/g, "");
   
-  // 1. Basic Math Calculator (e.g. 5 + 7, 100 * 2.5)
+  // Math calculator
   const mathRegex = /^\s*(\d+(?:\.\d+)?)\s*([\+\-\*\/])\s*(\d+(?:\.\d+)?)\s*$/;
   const mathMatch = query.match(mathRegex);
   if (mathMatch) {
@@ -695,11 +849,14 @@ function getFallbackAssistantReply(msg, hasApiKey = false) {
     if (op === '+') result = num1 + num2;
     else if (op === '-') result = num1 - num2;
     else if (op === '*') result = num1 * num2;
-    else if (op === '/') result = num2 !== 0 ? num1 / num2 : 'Infinity (division by zero)';
-    return `Calculated it for you! 🧮\n\n**${num1} ${op} ${num2} = ${result}**`;
+    else if (op === '/') result = num2 !== 0 ? num1 / num2 : 'Infinity';
+    
+    const thoughts = `Thoughts: The user is asking for a math calculation. I will evaluate the expression ${num1} ${op} ${num2}.`;
+    const reply = `Reply: Calculated it for you! 🧮\n\n${num1} ${op} ${num2} = ${result}`;
+    return `${thoughts}\n\n${reply}`;
   }
 
-  // Dynamic Country Capital matching (supports all 195 countries)
+  // Country Capitals
   if (query.includes("capital of")) {
     const capMatch = query.match(/capital of\s+([a-z\s\-]+)/);
     if (capMatch) {
@@ -707,90 +864,107 @@ function getFallbackAssistantReply(msg, hasApiKey = false) {
       if (countryCapitals[country]) {
         const capital = countryCapitals[country];
         const formattedCountry = country.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-        return `The capital of **${formattedCountry}** is **${capital}**! 🌍`;
+        
+        const thoughts = `Thoughts: The user wants to know the capital of ${formattedCountry}. I will retrieve it from my database.`;
+        const reply = `Reply: The capital of ${formattedCountry} is ${capital}! 🌍`;
+        return `${thoughts}\n\n${reply}`;
       }
     }
   }
 
-  if (query.includes("governor of")) {
-    const governorMatch = query.match(/governor of\s+([a-z\s\-]+)/);
-    if (governorMatch) {
-      const state = governorMatch[1].trim();
-      const normalizedState = state.replace(/\s+/g, ' ');
-      const compactState = normalizedState.replace(/\s+/g, '');
-      const governor = stateGovernors[normalizedState] || stateGovernors[compactState];
-      if (governor) {
-        return `The Governor of **Tamil Nadu** is **${governor}**.\n\nHe assumed office on **12 March 2026**.`;
-      }
-    }
+  // Governor of Tamil Nadu
+  if (query.includes("governor of tamil nadu") || query.includes("governor of tamilnadu")) {
+    const thoughts = `Thoughts: The user wants to know the Governor of Tamil Nadu in 2026. I will fetch the most recent data.`;
+    const reply = `Reply: The Governor of Tamil Nadu is Rajendra Vishwanath Arlekar. He assumed office on March 12, 2026.`;
+    return `${thoughts}\n\n${reply}`;
   }
 
-  // 2. Comprehensive GK and Facts Dictionary
+  // World Cup 2026
+  if (query.includes("world cup") || query.includes("fifa")) {
+    const thoughts = `Thoughts: The user is asking about the FIFA World Cup 2026. I will provide details about the host countries and dates.`;
+    const reply = `Reply: The FIFA World Cup 2026 starts next week on June 11, 2026! It is hosted jointly by Canada, Mexico, and the United States, featuring 48 teams.`;
+    return `${thoughts}\n\n${reply}`;
+  }
+
+  // Artemis / Space
+  if (query.includes("artemis") || query.includes("moon") || query.includes("space")) {
+    const thoughts = `Thoughts: The user is asking about space exploration. I will mention the current Artemis lunar landing preparations.`;
+    const reply = `Reply: In space exploration, prep is underway for NASA's Artemis III crewed lunar landing, following the successful completion of Artemis II training.`;
+    return `${thoughts}\n\n${reply}`;
+  }
+
+  // General facts
   const gkFacts = {
-    "governor of tamilnadu": "The Governor of **Tamil Nadu** is **Rajendra Vishwanath Arlekar**.\n\nHe assumed office on **12 March 2026**.",
-    "governor of tamil nadu": "The Governor of **Tamil Nadu** is **Rajendra Vishwanath Arlekar**.\n\nHe assumed office on **12 March 2026**.",
-    "father of java": "*James Gosling* is known as the \"Father of Java\".\n\nHe led the team at Sun Microsystems that created Java in the mid-1990s.",
-    "james gosling": "*James Gosling* is known as the \"Father of Java\".\n\nHe led the team at Sun Microsystems that created Java in the mid-1990s.",
-    "capital of india": "The capital of **India** is **New Delhi**. It was officially inaugurated as the capital in 1931! 🇮🇳",
-    "capital of delhi": "Delhi is a Union Territory in India, and its administrative capital is **New Delhi**.",
-    "capital of maharashtra": "The capital of **Maharashtra** is **Mumbai** (the financial hub of India)! 🌃",
-    "capital of karnataka": "The capital of **Karnataka** is **Bengaluru** (the Silicon Valley of India)! 💻",
-    "capital of tamil nadu": "The capital of **Tamil Nadu** is **Chennai** (the Gateway to South India)! 🏛️",
-    "capital of usa": "The capital of the **United States** is **Washington, D.C.** 🇺🇸",
-    "capital of united states": "The capital of the **United States** is **Washington, D.C.** 🇺🇸",
-    "capital of uk": "The capital of the **United Kingdom** is **London**, situated along the River Thames. 🇬🇧",
-    "capital of england": "The capital of **England** is **London**. 🇬🇧",
-    "capital of france": "The capital of **France** is **Paris**, globally known as the City of Light! 🇫🇷",
-    "capital of germany": "The capital of **Germany** is **Berlin**. 🇩🇪",
-    "capital of japan": "The capital of **Japan** is **Tokyo**, renowned for its high-tech cityscapes and traditional shrines! 🇯🇵",
-    "capital of china": "The capital of **China** is **Beijing**. 🇨🇳",
-    "capital of canada": "The capital of **Canada** is **Ottawa**! 🇨🇦",
-    "capital of australia": "The capital of **Australia** is **Canberra** (designed to resolve the rivalry between Sydney and Melbourne)! 🇦🇺",
-    "capital of russia": "The capital of **Russia** is **Moscow**. 🇷🇺",
-    "capital of italy": "The capital of **Italy** is **Rome**, home to the historic Colosseum! 🇮🇹",
+    "father of java": "James Gosling is known as the Father of Java. He led the team at Sun Microsystems that created Java in the mid-1990s.",
+    "james gosling": "James Gosling is known as the Father of Java. He led the team at Sun Microsystems that created Java in the mid-1990s.",
+    "capital of india": "The capital of India is New Delhi. It was officially inaugurated as the capital in 1931! 🇮🇳",
+    "capital of delhi": "Delhi is a Union Territory in India, and its administrative capital is New Delhi.",
+    "capital of maharashtra": "The capital of Maharashtra is Mumbai (the financial hub of India)! 🌃",
+    "capital of karnataka": "The capital of Karnataka is Bengaluru (the Silicon Valley of India)! 💻",
+    "capital of tamil nadu": "The capital of Tamil Nadu is Chennai (the Gateway to South India)! 🏛️",
+    "capital of usa": "The capital of the United States is Washington, D.C. 🇺🇸",
+    "capital of united states": "The capital of the United States is Washington, D.C. 🇺🇸",
+    "capital of uk": "The capital of the United Kingdom is London, situated along the River Thames. 🇬🇧",
+    "capital of england": "The capital of England is London. 🇬🇧",
+    "capital of france": "The capital of France is Paris, globally known as the City of Light! 🇫🇷",
+    "capital of germany": "The capital of Germany is Berlin. 🇩🇪",
+    "capital of japan": "The capital of Japan is Tokyo, renowned for its high-tech cityscapes and traditional shrines! 🇯🇵",
+    "capital of china": "The capital of China is Beijing. 🇨🇳",
+    "capital of canada": "The capital of Canada is Ottawa! 🇨🇦",
+    "capital of australia": "The capital of Australia is Canberra! 🇦🇺",
+    "capital of russia": "The capital of Russia is Moscow. 🇷🇺",
+    "capital of italy": "The capital of Italy is Rome, home to the historic Colosseum! 🇮🇹",
     
-    "currency of india": "The currency of **India** is the **Indian Rupee (INR)**, symbolized as **₹**.",
-    "currency of usa": "The currency of the **United States** is the **United States Dollar (USD)**, symbolized as **$**.",
-    "currency of uk": "The currency of the **United Kingdom** is the **British Pound Sterling (GBP)**, symbolized as **£**.",
-    "currency of japan": "The currency of **Japan** is the **Japanese Yen (JPY)**, symbolized as **¥**.",
-    "currency of europe": "The currency used across most European Union countries is the **Euro (EUR)**, symbolized as **€**.",
+    "currency of india": "The currency of India is the Indian Rupee (INR), symbolized as ₹.",
+    "currency of usa": "The currency of the United States is the United States Dollar (USD), symbolized as $.",
+    "currency of uk": "The currency of the United Kingdom is the British Pound Sterling (GBP), symbolized as £.",
+    "currency of japan": "The currency of Japan is the Japanese Yen (JPY), symbolized as ¥.",
+    "currency of europe": "The currency used across most European Union countries is the Euro (EUR), symbolized as €.",
     
-    "tallest mountain": "The tallest mountain in the world is **Mount Everest**, rising **8,848 meters (29,029 ft)** above sea level in the Himalayas! 🏔️",
-    "highest mountain": "The highest mountain in the world is **Mount Everest**, rising **8,848 meters (29,029 ft)** above sea level in the Himalayas! 🏔️",
-    "largest ocean": "The largest and deepest ocean on Earth is the **Pacific Ocean**, covering more than 30% of the Earth's surface! 🌊",
-    "fastest animal": "The fastest land animal is the **Cheetah**, which can accelerate from 0 to 60 mph in just 3 seconds, reaching top speeds of **120 km/h (75 mph)**! 🐆",
-    "speed of light": "The speed of light in a vacuum is exactly **299,792 kilometers per second** (approx. **300,000 km/s** or **186,000 miles per second**)! ⚡",
-    "largest country": "The largest country in the world by land area is **Russia**, covering over 17 million square kilometers! 🇷🇺",
-    "largest country by population": "The most populous country in the world is **India**, followed closely by China! 🇮🇳",
-    "smallest country": "The smallest country in the world by both area and population is **Vatican City**, spanning just 0.49 square kilometers! 🇻🇦",
-    "planet closest to sun": "The closest planet to the Sun is **Mercury**! ☀️",
-    "largest planet": "The largest planet in our solar system is **Jupiter**, which is so big that all other planets could fit inside it! 🪐",
-    "tallest building": "The tallest building in the world is the **Burj Khalifa** in Dubai, UAE, standing at **828 meters (2,717 feet)**! 🏢",
-    "who wrote national anthem of india": "The national anthem of India ('Jana Gana Mana') was composed by the Nobel laureate **Rabindranath Tagore** in 1911. 🇮🇳",
-    "father of india": "Mahatma Gandhi is globally revered as the **Father of the Nation** in India. 🇮🇳"
+    "tallest mountain": "The tallest mountain in the world is Mount Everest, rising 8,848 meters (29,029 ft) above sea level in the Himalayas! 🏔️",
+    "highest mountain": "The highest mountain in the world is Mount Everest, rising 8,848 meters (29,029 ft) above sea level in the Himalayas! 🏔️",
+    "largest ocean": "The largest and deepest ocean on Earth is the Pacific Ocean, covering more than 30% of the Earth's surface! 🌊",
+    "fastest animal": "The fastest land animal is the Cheetah, which can accelerate from 0 to 60 mph in just 3 seconds, reaching top speeds of 120 km/h (75 mph)! 🐆",
+    "speed of light": "The speed of light in a vacuum is exactly 299,792 kilometers per second (approx. 300,000 km/s)! ⚡",
+    "largest country": "The largest country in the world by land area is Russia, covering over 17 million square kilometers! 🇷🇺",
+    "largest country by population": "The most populous country in the world is India, followed closely by China! 🇮🇳",
+    "smallest country": "The smallest country in the world by both area and population is Vatican City, spanning just 0.49 square kilometers! 🇻🇦",
+    "planet closest to sun": "The closest planet to the Sun is Mercury! ☀️",
+    "largest planet": "The largest planet in our solar system is Jupiter! 🪐",
+    "tallest building": "The tallest building in the world is the Burj Khalifa in Dubai, UAE, standing at 828 meters (2,717 feet)! 🏢",
+    "who wrote national anthem of india": "The national anthem of India ('Jana Gana Mana') was composed by Rabindranath Tagore in 1911. 🇮🇳",
+    "father of india": "Mahatma Gandhi is globally revered as the Father of the Nation in India. 🇮🇳"
   };
 
-  // Check direct GK matches
   for (const key in gkFacts) {
     if (query.includes(key)) {
-      return gkFacts[key];
+      const thoughts = `Thoughts: The user is asking a general knowledge question about ${key}. I will retrieve the answer from my facts list.`;
+      const reply = `Reply: ${gkFacts[key]}`;
+      return `${thoughts}\n\n${reply}`;
     }
   }
 
-  // 3. Standard Chat routing
+  // Greetings
   if (query.includes('hello') || query.includes('hi ') || query.includes('hey')) {
-    return "Hello there! 👋 I am **Samvad AI**, your intelligent, real-time assistant. I am fully integrated into this chat app! How can I elevate your chatting experience today?";
+    const thoughts = "Thoughts: The user greeted me. I will respond with a warm greeting and introduce myself as Samvad AI.";
+    const reply = "Reply: Hello there! 👋 I am Samvad AI, your intelligent, real-time companion. How can I help you today?";
+    return `${thoughts}\n\n${reply}`;
   }
+
+  // Help
   if (query.includes('help') || query.includes('features') || query.includes('what can you do')) {
-    return `I am equipped with standard, premium AI capabilities:
-1. **AI Chatbot**: Talk to me 24/7. Ask questions, brainstorm, or write code!
-2. **Smart Suggestions**: I analyze chats and provide clickable pills above your keyboard.
-3. **AI Translation**: Translate any message to French, Hindi, Spanish, or Japanese in the context menu.
-4. **AI Summarizer**: Get instant bulleted highlights of any conversation in the top menu!`;
+    const thoughts = "Thoughts: The user wants to know my features. I will list my chat, song suggestion, translation, summarization, and image text extraction features.";
+    const reply = `Reply: I am equipped with standard, premium AI capabilities:
+1. AI Chatbot: Talk to me 24/7. Ask questions, brainstorm, or write code!
+2. Thoughts Display: I share my internal thoughts and reasoning before responding.
+3. Song Suggestions: Ask me to recommend songs based on your mood or genre!
+4. Image Text Extraction (OCR): Send me an image to extract readable text.
+5. AI Translation: Translate messages in the context menu.
+6. AI Summarizer: Get conversation highlights from the header menu.`;
+    return `${thoughts}\n\n${reply}`;
   }
-  if (query.includes('weather')) {
-    return "I don't have active GPS access, but I hope it's wonderful wherever you are! ☀️ Grab an umbrella just in case! ☔";
-  }
+
+  // Date and Time
   if (query.includes('time') || query.includes('date') || query.includes('month') || query.includes('year')) {
     const now = new Date();
     const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Kolkata' });
@@ -798,21 +972,18 @@ function getFallbackAssistantReply(msg, hasApiKey = false) {
     const day = now.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'Asia/Kolkata' });
     const month = now.toLocaleDateString('en-US', { month: 'long', timeZone: 'Asia/Kolkata' });
     const year = now.toLocaleDateString('en-US', { year: 'numeric', timeZone: 'Asia/Kolkata' });
-    return `The current real-time is **${timeStr}** on **${dateStr}**.\n\n(Day: *${day}*, Month: *${month}*, Year: *${year}*). Time flies when chatting! ⏳`;
-  }
-  if (query.includes('code') || query.includes('program')) {
-    return "I love coding! 💻 Here is a quick JavaScript snippet for you:\n```javascript\n// Play a synthesized chime\nconst ctx = new AudioContext();\nconst osc = ctx.createOscillator();\nosc.connect(ctx.destination);\nosc.start();\nosc.stop(ctx.currentTime + 0.1);\n```";
-  }
-  if (query.includes('thank')) {
-    return "You're very welcome! It is my pleasure to keep your Samvad chats active and intelligent. Let me know if there's anything else you need! 😊";
+    
+    const thoughts = "Thoughts: The user wants to know the current date and time. I will fetch the current system time in Asia/Kolkata timezone.";
+    const reply = `Reply: The current real-time is ${timeStr} on ${dateStr}. (Day: ${day}, Month: ${month}, Year: ${year}).`;
+    return `${thoughts}\n\n${reply}`;
   }
 
   const conversationalReplies = [
-    "I am here and ready to chat! What is on your mind? We can talk about coding, calculate math, or look up capital cities.",
-    "That is interesting! Tell me more, or ask me to calculate a math problem, translate some text, or find a country capital.",
-    "I am listening! I am currently running on local mode, but I can still do math, tell you country capitals, translate messages, or summarize this chat. What would you like to explore?",
-    "Let's chat! You can ask me for general facts, math answers, capital cities, or translations. What would you like to explore?",
-    "Hmm, that is food for thought! What should we talk about next? I can help with conversions, country capitals, or quick translations."
+    "I am here and ready to chat! What is on your mind? We can discuss coding, calculate math, recommend songs, or find general facts.",
+    "That is interesting! Tell me more, or ask me for a song recommendation, quick math calculation, or a capital city.",
+    "I am listening! I am currently running on local mode, but I can still recommend songs, do math, translate text, or summarize chats.",
+    "Let's chat! Ask me for general facts, song recommendations, math answers, or translations. What would you like to explore?",
+    "Hmm, that is food for thought! I can help with song recommendations, calculations, or quick translations."
   ];
 
   const getStableHash = (str) => {
@@ -824,7 +995,9 @@ function getFallbackAssistantReply(msg, hasApiKey = false) {
   };
 
   const idx = getStableHash(msg) % conversationalReplies.length;
-  return conversationalReplies[idx];
+  const thoughts = `Thoughts: The user sent a general message. I will select a suitable conversational reply from my local cache.`;
+  const reply = `Reply: ${conversationalReplies[idx]}`;
+  return `${thoughts}\n\n${reply}`;
 }
 
 function getFallbackTranslation(text, targetLanguage) {

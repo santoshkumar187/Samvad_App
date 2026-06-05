@@ -33,7 +33,14 @@ axios.interceptors.request.use(
 );
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(null)
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('samvad_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [usernameInput, setUsernameInput] = useState('')
   const [emailInput, setEmailInput] = useState('')
   const [passwordInput, setPasswordInput] = useState('')
@@ -271,22 +278,51 @@ function App() {
   const usersRef = useRef([])
   useEffect(() => { usersRef.current = users }, [users])
 
-  // Persistent Auth
+  // Persistent Auth & Immediate Socket Connection from Local Cache
   useEffect(() => {
     const token = localStorage.getItem('samvad_token');
+    const savedUserStr = localStorage.getItem('samvad_user');
+    
+    if (token && savedUserStr) {
+      try {
+        const savedUser = JSON.parse(savedUserStr);
+        // Connect socket immediately using the cached user details
+        const newSocket = io(SERVER_URL, {
+          auth: { token }
+        });
+        setSocketInstance(newSocket);
+        newSocket.emit('join', savedUser.id);
+      } catch (e) {
+        console.error('Failed to parse cached user for socket:', e);
+      }
+    }
+
     if (token) {
       const verifyToken = async () => {
         try {
           const res = await axios.get(`${SERVER_URL}/api/auth/me`);
           setCurrentUser(res.data);
-          const newSocket = io(SERVER_URL, {
-            auth: { token: localStorage.getItem('samvad_token') }
+          localStorage.setItem('samvad_user', JSON.stringify(res.data));
+          
+          setSocketInstance(prev => {
+            if (!prev) {
+              const newSocket = io(SERVER_URL, {
+                auth: { token }
+              });
+              newSocket.emit('join', res.data.id);
+              return newSocket;
+            }
+            return prev;
           });
-          setSocketInstance(newSocket);
-          newSocket.emit('join', res.data.id);
         } catch (err) {
           console.error('Session expired', err);
           localStorage.removeItem('samvad_token');
+          localStorage.removeItem('samvad_user');
+          setCurrentUser(null);
+          setSocketInstance(prev => {
+            if (prev) prev.disconnect();
+            return null;
+          });
         }
       };
       verifyToken();
@@ -329,6 +365,7 @@ function App() {
       const { user, token } = res.data;
       
       setCurrentUser(user)
+      localStorage.setItem('samvad_user', JSON.stringify(user));
       localStorage.setItem('samvad_token', token);
       
       const newSocket = io(SERVER_URL, {
@@ -723,9 +760,13 @@ function App() {
 
   const handleLogout = () => {
     setCurrentUser(null);
-    setSocketInstance(null);
+    setSocketInstance(prev => {
+      if (prev) prev.disconnect();
+      return null;
+    });
     setSelectedUser(null);
     localStorage.removeItem('samvad_token');
+    localStorage.removeItem('samvad_user');
   }
 
   const handleDeleteMessage = async (messageId, type) => {
@@ -817,6 +858,7 @@ function App() {
     try {
       const res = await axios.put(`${SERVER_URL}/api/users/${currentUser.id}/profile`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       setCurrentUser(res.data)
+      localStorage.setItem('samvad_user', JSON.stringify(res.data))
       alert('Profile updated successfully!')
     } catch (err) {
       console.error('Profile update failed', err)

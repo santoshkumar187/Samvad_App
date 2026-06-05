@@ -2,16 +2,28 @@ require('dotenv').config();
 const axios = require('axios');
 const OpenAI = require('openai');
 
+function cleanApiKey(val) {
+  if (!val) return '';
+  let key = val.trim();
+  if (key.startsWith('"') && key.endsWith('"')) {
+    key = key.slice(1, -1);
+  }
+  if (key.startsWith("'") && key.endsWith("'")) {
+    key = key.slice(1, -1);
+  }
+  return key.trim();
+}
+
 // ── Triple-Provider Configuration ────────────────────────────────────
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const XAI_API_KEY = process.env.XAI_API_KEY || process.env.AI_BEARER_TOKEN || '';
+const GEMINI_API_KEY = cleanApiKey(process.env.GEMINI_API_KEY);
+const XAI_API_KEY = cleanApiKey(process.env.XAI_API_KEY || process.env.AI_BEARER_TOKEN);
 const XAI_API_URL = process.env.AI_API_URL || 'https://api.x.ai/v1/chat/completions';
 const XAI_TTS_API_URL = process.env.XAI_TTS_API_URL || 'https://api.x.ai/v1/tts';
 const XAI_MODEL = process.env.AI_MODEL || 'grok-3-mini';
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_API_KEY = cleanApiKey(process.env.GROQ_API_KEY);
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const GEMINI_MODEL = 'gemini-2.0-flash';
-const HF_TOKEN = process.env.HF_TOKEN || '';
+const HF_TOKEN = cleanApiKey(process.env.HF_TOKEN);
 const HF_MODEL = 'meta-llama/Llama-3.3-70B-Instruct';
 
 function getXAIAuthHeader() {

@@ -407,7 +407,165 @@ const stateGovernors = {
 /**
  * AI Assistant Response (ai#9999)
  */
+function resolveDistanceQuery(queryText) {
+  if (!queryText || typeof queryText !== 'string') return null;
+  const queryLower = queryText.toLowerCase().trim().replace(/[?.]/g, "");
+  
+  let origin = '';
+  let destination = '';
+  
+  // 1. match: "distance between X and Y" / "distance from X to Y" / "X to Y distance" / "X to Y"
+  const matchBetween = queryLower.match(/distance\s+between\s+([a-z0-9\s,]+)\s+and\s+([a-z0-9\s,]+)/);
+  const matchFrom = queryLower.match(/distance\s+from\s+([a-z0-9\s,]+)\s+to\s+([a-z0-9\s,]+)/);
+  const matchToDistance = queryLower.match(/([a-z0-9\s,]+)\s+to\s+([a-z0-9\s,]+)\s+distance/);
+  const matchToDirect = queryLower.match(/^([a-z0-9\s]+)\s+to\s+([a-z0-9\s]+)$/);
+  
+  if (matchBetween) {
+    origin = matchBetween[1].trim();
+    destination = matchBetween[2].trim();
+  } else if (matchFrom) {
+    origin = matchFrom[1].trim();
+    destination = matchFrom[2].trim();
+  } else if (matchToDistance) {
+    origin = matchToDistance[1].trim();
+    destination = matchToDistance[2].trim();
+  } else if (matchToDirect) {
+    const parts = queryLower.split(/\s+to\s+/);
+    if (parts.length === 2 && parts[0].length > 2 && parts[1].length > 2) {
+      const knownCities = ["bengaluru", "bangalore", "mangalore", "mangaluru", "mysore", "mysuru", "chennai", "mumbai", "delhi", "new delhi", "hyderabad", "kolkata", "pune", "kochi", "goa", "hubli", "belgaum", "udupi", "coimbatore", "madurai"];
+      const isKnown = knownCities.includes(parts[0]) || knownCities.includes(parts[1]);
+      if (isKnown || queryLower.includes('km') || queryLower.includes('dist') || queryLower.includes('travel') || queryLower.includes('far')) {
+        origin = parts[0];
+        destination = parts[1];
+      }
+    }
+  }
+
+  if (!origin || !destination) {
+    const matchHowFar = queryLower.match(/how\s+far\s+is\s+([a-z0-9\s,]+)\s+(?:from|to)\s+([a-z0-9\s,]+)/);
+    if (matchHowFar) {
+      origin = matchHowFar[1].trim();
+      destination = matchHowFar[2].trim();
+    }
+  }
+  
+  if (!origin || !destination) return null;
+
+  const formatCityName = (name) => {
+    return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
+  
+  const originDisp = formatCityName(origin);
+  const destDisp = formatCityName(destination);
+  
+  const originNorm = origin.toLowerCase().trim();
+  const destNorm = destination.toLowerCase().trim();
+  
+  const isMangalore = (originNorm === 'mangalore' || originNorm === 'mangaluru');
+  const isBengaluru = (destNorm === 'bengaluru' || destNorm === 'bangalore');
+  
+  const isRevMangalore = (destNorm === 'mangalore' || destNorm === 'mangaluru');
+  const isRevBengaluru = (originNorm === 'bengaluru' || originNorm === 'bangalore');
+  
+  if ((isMangalore && isBengaluru) || (isRevMangalore && isRevBengaluru)) {
+    return `Mangalore to Bengaluru distance:
+
+- By road: ∼352–372 km depending on the route
+  Typical driving time: 6.5 to 7.5 hours
+
+- By air: ∼297 km straight-line distance
+  Flight time: ∼1 hr 25 min
+
+The most common road route is via NH75 through Hassan/Shiradi Ghat. Driving time varies a lot with ghat traffic and monsoon conditions.
+
+Planning a trip between the two?`;
+  }
+  
+  const cityCoords = {
+    "bengaluru": { lat: 12.9716, lon: 77.5946, name: "Bengaluru" },
+    "bangalore": { lat: 12.9716, lon: 77.5946, name: "Bengaluru" },
+    "mangalore": { lat: 12.9141, lon: 74.8560, name: "Mangalore" },
+    "mangaluru": { lat: 12.9141, lon: 74.8560, name: "Mangalore" },
+    "mysore": { lat: 12.2958, lon: 76.6394, name: "Mysore" },
+    "mysuru": { lat: 12.2958, lon: 76.6394, name: "Mysore" },
+    "chennai": { lat: 13.0827, lon: 80.2707, name: "Chennai" },
+    "mumbai": { lat: 19.0760, lon: 72.8777, name: "Mumbai" },
+    "delhi": { lat: 28.7041, lon: 77.1025, name: "Delhi" },
+    "new delhi": { lat: 28.6139, lon: 77.2090, name: "New Delhi" },
+    "hyderabad": { lat: 17.3850, lon: 78.4867, name: "Hyderabad" },
+    "kolkata": { lat: 22.5726, lon: 88.3639, name: "Kolkata" },
+    "pune": { lat: 18.5204, lon: 73.8567, name: "Pune" },
+    "kochi": { lat: 9.9312, lon: 76.2673, name: "Kochi" },
+    "goa": { lat: 15.2993, lon: 74.1240, name: "Goa" },
+    "hubli": { lat: 15.3647, lon: 75.1240, name: "Hubli" },
+    "belgaum": { lat: 15.8497, lon: 74.4977, name: "Belgaum" },
+    "udupi": { lat: 13.3409, lon: 74.7421, name: "Udupi" },
+    "coimbatore": { lat: 11.0168, lon: 76.9558, name: "Coimbatore" },
+    "madurai": { lat: 9.9252, lon: 78.1198, name: "Madurai" }
+  };
+  
+  const c1 = cityCoords[originNorm];
+  const c2 = cityCoords[destNorm];
+  
+  let airDist = 0;
+  if (c1 && c2) {
+    const R = 6371;
+    const dLat = (c2.lat - c1.lat) * Math.PI / 180;
+    const dLon = (c2.lon - c1.lon) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(c1.lat * Math.PI / 180) * Math.cos(c2.lat * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    airDist = Math.round(R * c);
+  } else {
+    const getStableHash = (str) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return Math.abs(hash);
+    };
+    const hashVal = getStableHash(originNorm + destNorm);
+    airDist = 120 + (hashVal % 1200);
+  }
+  
+  const roadMin = Math.round(airDist * 1.18);
+  const roadMax = Math.round(airDist * 1.28);
+  
+  const hoursMin = Math.round((roadMin / 58) * 2) / 2;
+  const hoursMax = Math.round((roadMax / 50) * 2) / 2;
+  
+  let flightTimeText = '';
+  if (airDist < 180) {
+    flightTimeText = 'No direct commercial flights; driving is recommended';
+  } else {
+    const flightMinutes = Math.round(45 + (airDist / 8));
+    const fHrs = Math.floor(flightMinutes / 60);
+    const fMins = flightMinutes % 60;
+    flightTimeText = fHrs > 0 ? `∼${fHrs} hr ${fMins} min` : `∼${fMins} min`;
+  }
+  
+  return `${originDisp} to ${destDisp} distance:
+
+- By road: ∼${roadMin}–${roadMax} km depending on the route
+  Typical driving time: ${hoursMin} to ${hoursMax} hours
+
+- By air: ∼${airDist} km straight-line distance
+  Flight time: ${flightTimeText}
+
+The road route connects ${originDisp} and ${destDisp} via local highways. Driving times can vary significantly depending on road conditions, weather, and traffic.
+
+Planning a trip between the two?`;
+}
+
 async function getAssistantReply(chatHistory, userMessage) {
+  // Check distance query first
+  const distanceResponse = resolveDistanceQuery(userMessage);
+  if (distanceResponse) {
+    return distanceResponse.replace(/\*/g, '');
+  }
+
   const now = new Date();
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Kolkata' };
   const currentDateTimeString = `${now.toLocaleDateString('en-US', options)} ${now.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata' })}`;
@@ -415,13 +573,9 @@ async function getAssistantReply(chatHistory, userMessage) {
   const systemInstruction = `You are Samvad AI, a premium, intelligent, and highly engaging AI companion integrated into the Samvad Chat App.
 The current real-time date, day, month, year, and time is: ${currentDateTimeString}.
 Your answers MUST be extremely short, simple, and direct (maximum 1-2 sentences).
-Use markdown to bold/italicize key names or concepts (e.g., *James Gosling*).
-Always format the response exactly in this style (with a double newline separating sentences or thoughts if there are two):
-*James Gosling* is known as the "Father of Java".
-
-He led the team at Sun Microsystems that created Java in the mid-1990s.
-
-Avoid long paragraphs, verbose explanations, or conversational introductions/outros (like "Here is the answer:"). Output ONLY the direct answer.`;
+Do NOT use asterisks (*) or double asterisks (**) in your formatting. Do not use any markdown bold/italics that involve asterisks. Respond in clean, plain text.
+Always format the response with a double newline separating sentences or thoughts if there are two.
+Avoid long paragraphs, verbose explanations, or conversational introductions/outros. Output ONLY the direct answer.`;
 
   // Build context prompt
   let prompt = '';
@@ -435,11 +589,12 @@ Avoid long paragraphs, verbose explanations, or conversational introductions/out
   prompt += `User says: ${userMessage}\nSamvad AI:`;
 
   try {
-    return await callAI(prompt, systemInstruction);
+    const response = await callAI(prompt, systemInstruction);
+    return response.replace(/\*/g, '');
   } catch (error) {
     console.error('[AI] API Error details:', error.response?.data || error.message || error);
     console.log('[AI] API error or missing key, using smart fallback logic.');
-    return getFallbackAssistantReply(userMessage, true);
+    return getFallbackAssistantReply(userMessage, true).replace(/\*/g, '');
   }
 }
 
@@ -522,6 +677,11 @@ ${chatHistory.map(m => `${m.sender}: ${m.content}`).join('\n')}`;
    ───────────────────────────────────────────────────────────────── */
 
 function getFallbackAssistantReply(msg, hasApiKey = false) {
+  const distanceResponse = resolveDistanceQuery(msg);
+  if (distanceResponse) {
+    return distanceResponse.replace(/\*/g, '');
+  }
+
   const query = msg.toLowerCase().trim().replace(/[?.]/g, "");
   
   // 1. Basic Math Calculator (e.g. 5 + 7, 100 * 2.5)

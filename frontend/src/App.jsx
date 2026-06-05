@@ -274,6 +274,17 @@ function App() {
   const [incomingCall, setIncomingCall] = useState(null)
   const [activeCall, setActiveCall] = useState(null)
 
+  // Auto-fullscreen when selecting the AI Assistant
+  useEffect(() => {
+    if (!selectedUser) {
+      setIsSidebarHidden(false);
+      return;
+    }
+    if (selectedUser.samvad_id === 'ai#9999') {
+      setIsSidebarHidden(true);
+    }
+  }, [selectedUser]);
+
   // Ref to always have the latest users list (avoids stale closure in socket handlers)
   const usersRef = useRef([])
   useEffect(() => { usersRef.current = users }, [users])

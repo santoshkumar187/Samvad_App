@@ -522,7 +522,9 @@ Key context for June 2026:
 
 Formatting Rules:
 - Respond naturally and conversationally, using standard markdown formatting (such as bullet points, numbered lists, and bold text with asterisks \`*\` or \`**\`) to make your answers structured and easy to read.
-- Keep your answers clean, well-formatted, and helpful.`;
+- Do NOT output any standard AI disclaimers, warnings, notes, or messages regarding your knowledge cutoff (e.g., do not say "Please note that my knowledge cutoff is...").
+- Do NOT add conversational follow-up questions at the end of your response (e.g., do not ask "Would you like to know more...").
+- Keep your answers clean, well-formatted, direct, and helpful.`;
 
   // Build context prompt
   let prompt = '';

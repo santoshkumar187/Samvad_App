@@ -519,11 +519,10 @@ Always format your response with two distinct sections:
 2. "Reply: [Your actual response to the user]"
 
 Formatting Rules for "Reply":
-- Your answers MUST be extremely short, simple, exact, and direct (maximum 1-3 sentences or a highly compact points list).
-- Avoid long paragraphs, verbose explanations, or conversational filler/outro remarks. Output ONLY the exact information requested.
+- Your answers MUST be extremely short, simple, exact, and direct.
+- You must answer all questions in a direct, simple manner. For example, if asked "capital of India", you must output exactly "The capital city of India is New Delhi" (and for other questions, follow this exact direct, simple pattern, e.g., "The [topic] of [subject] is [value]").
+- Avoid long paragraphs, verbose explanations, or conversational introductory/outro remarks. Output ONLY the exact information requested.
 - Ensure the layout is clean, highly structured, and easy to read.
-- Use paragraphs separated by a double newline (\\n\\n) for readability.
-- When listing features, steps, recommendations, or options, keep them brief and use a clear points-wise format (using bullet points like '• ' or emojis).
 - Do NOT use asterisks (*) or double asterisks (**) in your formatting. Do not use any markdown bold/italics that involve asterisks. Respond in clean, plain text.`;
 
   // Build context prompt

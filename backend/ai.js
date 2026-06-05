@@ -708,11 +708,12 @@ Always format your response with two distinct sections:
 2. "Reply: [Your actual response to the user]"
 
 Formatting Rules for "Reply":
+- Your answers MUST be extremely short, simple, exact, and direct (maximum 1-3 sentences or a highly compact points list).
+- Avoid long paragraphs, verbose explanations, or conversational filler/outro remarks. Output ONLY the exact information requested.
 - Ensure the layout is clean, highly structured, and easy to read.
 - Use paragraphs separated by a double newline (\\n\\n) for readability.
-- When listing features, steps, recommendations, or options, use a clear points-wise format (using bullet points like '• ' or emojis, or numbered lists like '1. ', '2. ').
-- Do NOT use asterisks (*) or double asterisks (**) in your formatting. Do not use any markdown bold/italics that involve asterisks. Respond in clean, plain text.
-- Avoid cluttered text walls. Maintain clean, spacing-enriched formatting.`;
+- When listing features, steps, recommendations, or options, keep them brief and use a clear points-wise format (using bullet points like '• ' or emojis).
+- Do NOT use asterisks (*) or double asterisks (**) in your formatting. Do not use any markdown bold/italics that involve asterisks. Respond in clean, plain text.`;
 
   // Build context prompt
   let prompt = '';

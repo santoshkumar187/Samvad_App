@@ -489,29 +489,23 @@ async function getAssistantReply(chatHistory, userMessage, fileUrl = null, fileT
         ocrResult = `[Local OCR Engine] Detected an image but require a configured Gemini API key to extract full high-fidelity text. Filename: ${path.basename(fileUrl)}`;
       }
       
-      const thoughts = `Thoughts: The user sent an image. I will extract all readable text from it using the Gemini vision capabilities.`;
-      const reply = `Reply: Extracted text from the image:\n\n${ocrResult}`;
-      return `${thoughts}\n\n${reply}`.replace(/\*/g, '');
+      return `Extracted text from the image:\n\n${ocrResult}`;
     } catch (err) {
       console.error('[AI] OCR failed:', err.message);
-      return `Thoughts: The user sent an image, but text extraction failed due to an error: ${err.message}.\n\nReply: Sorry, I couldn't extract text from this image. Please try again.`.replace(/\*/g, '');
+      return `Sorry, I couldn't extract text from this image. Please try again.`;
     }
   }
 
   // Check distance query
   const distanceResponse = resolveDistanceQuery(userMessage);
   if (distanceResponse) {
-    const thoughts = `Thoughts: The user is asking for the distance between locations. I will retrieve the road and air routes.`;
-    const reply = `Reply: ${distanceResponse}`;
-    return `${thoughts}\n\n${reply}`.replace(/\*/g, '');
+    return distanceResponse;
   }
 
   // Check song recommendation
   const songResponse = resolveSongRecommendation(userMessage);
   if (songResponse) {
-    const thoughts = `Thoughts: The user wants song recommendations. I will suggest some top songs based on the mood.`;
-    const reply = `Reply: ${songResponse}`;
-    return `${thoughts}\n\n${reply}`.replace(/\*/g, '');
+    return songResponse;
   }
 
   const now = new Date();
@@ -526,16 +520,9 @@ Key context for June 2026:
 - Space exploration is reaching new heights with NASA's Artemis III crewed lunar landing prep.
 - AI integration in communication apps (like Samvad) is standard.
 
-Always format your response with two distinct sections:
-1. "Thoughts: [A brief, interesting 1-sentence thought process detailing your reasoning or context, up to June 2026]"
-2. "Reply: [Your actual response to the user]"
-
-Formatting Rules for "Reply":
-- Your answers MUST be extremely short, simple, exact, and direct.
-- You must answer all questions in a direct, simple manner. For example, if asked "capital of India", you must output exactly "The capital city of India is New Delhi" (and for other questions, follow this exact direct, simple pattern, e.g., "The [topic] of [subject] is [value]").
-- Avoid long paragraphs, verbose explanations, or conversational introductory/outro remarks. Output ONLY the exact information requested.
-- Ensure the layout is clean, highly structured, and easy to read.
-- Do NOT use asterisks (*) or double asterisks (**) in your formatting. Do not use any markdown bold/italics that involve asterisks. Respond in clean, plain text.`;
+Formatting Rules:
+- Respond naturally and conversationally, using standard markdown formatting (such as bullet points, numbered lists, and bold text with asterisks \`*\` or \`**\`) to make your answers structured and easy to read.
+- Keep your answers clean, well-formatted, and helpful.`;
 
   // Build context prompt
   let prompt = '';
@@ -550,11 +537,11 @@ Formatting Rules for "Reply":
 
   try {
     const response = await callAI(prompt, systemInstruction);
-    return response.replace(/\*/g, '');
+    return response;
   } catch (error) {
     console.error('[AI] API Error details:', error.response?.data || error.message || error);
     console.log('[AI] API error or missing key, using smart fallback logic.');
-    return getFallbackAssistantReply(userMessage, fileUrl, fileType).replace(/\*/g, '');
+    return getFallbackAssistantReply(userMessage, fileUrl, fileType);
   }
 }
 
@@ -641,25 +628,19 @@ function getFallbackAssistantReply(msg, fileUrl = null, fileType = null) {
   if (fileType === 'image' && fileUrl) {
     const path = require('path');
     const filename = path.basename(fileUrl);
-    const thoughts = `Thoughts: The user sent an image. I need to run text extraction, but the API is offline. I will prompt the user to configure the API key.`;
-    const reply = `Reply: [Local OCR Engine] Detected an image but require a configured Gemini API key to extract full high-fidelity text. Filename: ${filename}`;
-    return `${thoughts}\n\n${reply}`;
+    return `[Local OCR Engine] Detected an image but require a configured Gemini API key to extract full high-fidelity text. Filename: ${filename}`;
   }
 
   // Check distance query
   const distanceResponse = resolveDistanceQuery(msg);
   if (distanceResponse) {
-    const thoughts = `Thoughts: The user is asking for the distance between locations. I will compute the road and air routes.`;
-    const reply = `Reply: ${distanceResponse.replace(/\*/g, '')}`;
-    return `${thoughts}\n\n${reply}`;
+    return distanceResponse;
   }
 
   // Check song recommendation
   const songResponse = resolveSongRecommendation(msg);
   if (songResponse) {
-    const thoughts = `Thoughts: The user wants song recommendations. I will suggest some top songs based on the mood.`;
-    const reply = `Reply: ${songResponse}`;
-    return `${thoughts}\n\n${reply}`;
+    return songResponse;
   }
 
   const query = msg.toLowerCase().trim().replace(/[?.]/g, "");
@@ -677,29 +658,22 @@ function getFallbackAssistantReply(msg, fileUrl = null, fileType = null) {
     else if (op === '*') result = num1 * num2;
     else if (op === '/') result = num2 !== 0 ? num1 / num2 : 'Infinity';
     
-    const thoughts = `Thoughts: The user is asking for a math calculation. I will evaluate the expression ${num1} ${op} ${num2}.`;
-    const reply = `Reply: Calculated it for you! 🧮\n\n${num1} ${op} ${num2} = ${result}`;
-    return `${thoughts}\n\n${reply}`;
+    return `Calculated it for you! 🧮\n\n${num1} ${op} ${num2} = ${result}`;
   }
 
   // Greetings
   if (query.includes('hello') || query.includes('hi ') || query.includes('hey')) {
-    const thoughts = "Thoughts: The user greeted me. I will respond with a warm greeting and introduce myself as Samvad AI.";
-    const reply = "Reply: Hello there! 👋 I am Samvad AI, your intelligent, real-time companion. How can I help you today?";
-    return `${thoughts}\n\n${reply}`;
+    return "Hello there! 👋 I am Samvad AI, your intelligent, real-time companion. How can I help you today?";
   }
 
   // Help
   if (query.includes('help') || query.includes('features') || query.includes('what can you do')) {
-    const thoughts = "Thoughts: The user wants to know my features. I will list my chat, song suggestion, translation, summarization, and image text extraction features.";
-    const reply = `Reply: I am equipped with standard, premium AI capabilities:
+    return `I am equipped with standard, premium AI capabilities:
 1. AI Chatbot: Talk to me 24/7. Ask questions, brainstorm, or write code!
-2. Thoughts Display: I share my internal thoughts and reasoning before responding.
-3. Song Suggestions: Ask me to recommend songs based on your mood or genre!
-4. Image Text Extraction (OCR): Send me an image to extract readable text.
-5. AI Translation: Translate messages in the context menu.
-6. AI Summarizer: Get conversation highlights from the header menu.`;
-    return `${thoughts}\n\n${reply}`;
+2. Song Suggestions: Ask me to recommend songs based on your mood or genre!
+3. Image Text Extraction (OCR): Send me an image to extract readable text.
+4. AI Translation: Translate messages in the context menu.
+5. AI Summarizer: Get conversation highlights from the header menu.`;
   }
 
   // Date and Time
@@ -711,15 +685,11 @@ function getFallbackAssistantReply(msg, fileUrl = null, fileType = null) {
     const month = now.toLocaleDateString('en-US', { month: 'long', timeZone: 'Asia/Kolkata' });
     const year = now.toLocaleDateString('en-US', { year: 'numeric', timeZone: 'Asia/Kolkata' });
     
-    const thoughts = "Thoughts: The user wants to know the current date and time. I will fetch the current system time in Asia/Kolkata timezone.";
-    const reply = `Reply: The current real-time is ${timeStr} on ${dateStr}. (Day: ${day}, Month: ${month}, Year: ${year}).`;
-    return `${thoughts}\n\n${reply}`;
+    return `The current real-time is ${timeStr} on ${dateStr}. (Day: ${day}, Month: ${month}, Year: ${year}).`;
   }
 
   // Default Guidance Fallback for General Knowledge & Chats
-  const thoughts = "Thoughts: The user's query could not be processed locally. I will guide them to configure the API keys in backend/.env.";
-  const reply = "Reply: I am running in local fallback mode because no active AI API keys are configured in your backend .env file.\n\nPlease configure your GEMINI_API_KEY, GROQ_API_KEY, or XAI_API_KEY to enable dynamic general knowledge lookups, translation, and complete real-time responses.";
-  return `${thoughts}\n\n${reply}`;
+  return "I am running in local fallback mode because no active AI API keys are configured in your backend .env file.\n\nPlease configure your GEMINI_API_KEY, GROQ_API_KEY, or XAI_API_KEY to enable dynamic general knowledge lookups, translation, and complete real-time responses.";
 }
 
 function getFallbackTranslation(text, targetLanguage) {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import EmojiPicker, { Theme } from 'emoji-picker-react'
+import EmojiPicker, { Theme, Categories } from 'emoji-picker-react'
 import axios from 'axios'
 import { MdInsertEmoticon, MdAdd, MdMic, MdInsertPhoto, MdSend, MdCameraAlt, MdDeleteOutline } from 'react-icons/md'
 
@@ -423,6 +423,40 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
                       previewConfig={{ showPreview: false }}
                       skinTonesDisabled={true}
                       emojiSize={22}
+                      categories={[
+                        {
+                          category: Categories.SMILEYS_PEOPLE,
+                          name: 'Smileys & People'
+                        },
+                        {
+                          category: Categories.ANIMALS_NATURE,
+                          name: 'Animals & Nature'
+                        },
+                        {
+                          category: Categories.FOOD_DRINK,
+                          name: 'Food & Drink'
+                        },
+                        {
+                          category: Categories.TRAVEL_PLACES,
+                          name: 'Travel & Places'
+                        },
+                        {
+                          category: Categories.ACTIVITIES,
+                          name: 'Activities'
+                        },
+                        {
+                          category: Categories.OBJECTS,
+                          name: 'Objects'
+                        },
+                        {
+                          category: Categories.SYMBOLS,
+                          name: 'Symbols'
+                        },
+                        {
+                          category: Categories.FLAGS,
+                          name: 'Flags'
+                        }
+                      ]}
                     />
                   )}
                   {activeTab === 'gif' && (

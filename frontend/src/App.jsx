@@ -897,14 +897,21 @@ function App() {
   const handleProfileUpdate = async (formData) => {
     try {
       const res = await axios.put(`${SERVER_URL}/api/users/${currentUser.id}/profile`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
-      setCurrentUser(res.data)
-      localStorage.setItem('samvad_user', JSON.stringify(res.data))
+      const { token, ...userData } = res.data
+      // If username changed, server returns a new JWT token
+      if (token) {
+        localStorage.setItem('samvad_token', token)
+      }
+      setCurrentUser(userData)
+      localStorage.setItem('samvad_user', JSON.stringify(userData))
       alert('Profile updated successfully!')
     } catch (err) {
       console.error('Profile update failed', err)
-      alert('Failed to update profile.')
+      const errorMsg = err.response?.data?.error || 'Failed to update profile.'
+      alert(errorMsg)
     }
   }
+
 
   const handleAddFriend = async (friendId) => {
     try {

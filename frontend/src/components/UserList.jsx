@@ -11,6 +11,7 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
   const [showSettings, setShowSettings] = React.useState(false);
   const [showProfileModal, setShowProfileModal] = React.useState(false);
   const [aboutText, setAboutText] = React.useState(currentUser?.about || 'Available');
+  const [usernameText, setUsernameText] = React.useState(currentUser?.username || '');
   const [profilePicFile, setProfilePicFile] = React.useState(null);
   const [searchId, setSearchId] = React.useState('');
   const [searchResult, setSearchResult] = React.useState(null);
@@ -162,6 +163,9 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
     e.preventDefault();
     const formData = new FormData();
     formData.append('about', aboutText);
+    if (usernameText.trim() && usernameText.trim() !== currentUser?.username) {
+      formData.append('username', usernameText.trim());
+    }
     if (profilePicFile) formData.append('profile_pic', profilePicFile);
     if (onProfileUpdate) onProfileUpdate(formData);
     setShowProfileModal(false);
@@ -406,6 +410,16 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
                   ref={profilePicInputRef}
                   onChange={e => setProfilePicFile(e.target.files[0])}
                   accept="image/*"
+                />
+              </div>
+              <div className="input-wrapper" style={{ border: '1px solid #333' }}>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Username" 
+                  value={usernameText}
+                  onChange={e => setUsernameText(e.target.value)}
+                  style={{ fontWeight: '600' }}
                 />
               </div>
               <div className="input-wrapper" style={{ border: '1px solid #333' }}>

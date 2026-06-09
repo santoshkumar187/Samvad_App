@@ -307,13 +307,35 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 
 app.put('/api/users/:id/profile', upload.single('profile_pic'), async (req, res) => {
   const { id } = req.params;
-  const { about } = req.body;
+  const { about, username } = req.body;
   const file = req.file;
   
   try {
     const pool = getPool();
     let updateQuery = 'UPDATE users SET about = ?';
     let params = [about || 'Available'];
+    
+    // Handle username change
+    let usernameChanged = false;
+    if (username && username.trim()) {
+      const trimmedUsername = username.trim();
+      // Check if username is actually different
+      const [currentRows] = await pool.query('SELECT username FROM users WHERE id = ?', [id]);
+      if (currentRows.length > 0 && currentRows[0].username !== trimmedUsername) {
+        // Check uniqueness
+        const [existing] = await pool.query('SELECT id FROM users WHERE username = ? AND id != ?', [trimmedUsername, id]);
+        if (existing.length > 0) {
+          return res.status(400).json({ error: 'Username already taken' });
+        }
+        updateQuery += ', username = ?';
+        params.push(trimmedUsername);
+        // Update samvad_id to reflect new username
+        const newSamvadId = `${trimmedUsername.toLowerCase()}#${Math.floor(1000 + Math.random() * 9000)}`;
+        updateQuery += ', samvad_id = ?';
+        params.push(newSamvadId);
+        usernameChanged = true;
+      }
+    }
     
     if (file) {
       // Upload buffer to Cloudinary
@@ -332,12 +354,21 @@ app.put('/api/users/:id/profile', upload.single('profile_pic'), async (req, res)
     await pool.query(updateQuery, params);
     
     const [rows] = await pool.query('SELECT id, username, email, samvad_id, online, profile_pic, about, last_seen, created_at FROM users WHERE id = ?', [id]);
-    res.json(rows[0]);
+    const updatedUser = rows[0];
+    
+    // If username changed, issue a new JWT token
+    const response = { ...updatedUser };
+    if (usernameChanged) {
+      response.token = jwt.sign({ id: updatedUser.id, username: updatedUser.username }, JWT_SECRET);
+    }
+    
+    res.json(response);
   } catch (error) {
     console.error('Profile update error:', error);
     res.status(500).json({ error: 'Database error' });
   }
 });
+
 
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {

@@ -10,6 +10,7 @@ async function initDB() {
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || 'root',
     database: process.env.DB_NAME || 'chatapp',
+    charset: 'utf8mb4',
     ssl: { rejectUnauthorized: false }
   };
 
@@ -138,7 +139,19 @@ async function initDB() {
       );
     `);
 
-    console.log('Database tables initialized successfully.');
+    // Convert tables to utf8mb4 to fully support emojis
+    try {
+      await pool.query("ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+      await pool.query("ALTER TABLE `groups` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+      await pool.query("ALTER TABLE group_members CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+      await pool.query("ALTER TABLE messages CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+      await pool.query("ALTER TABLE friends CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+      await pool.query("ALTER TABLE pinned_chats CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+      await pool.query("ALTER TABLE pinned_groups CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+      console.log('Database tables collation converted to utf8mb4_unicode_ci successfully.');
+    } catch (migrationErr) {
+      console.warn("Table collation conversion warning (non-fatal, tables may already be utf8mb4):", migrationErr.message);
+    }
 
     // Migration checks
     const [userCols] = await pool.query("SHOW COLUMNS FROM users LIKE 'samvad_id'");

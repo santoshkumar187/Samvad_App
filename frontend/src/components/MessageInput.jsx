@@ -422,6 +422,7 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
                       height="100%"
                       previewConfig={{ showPreview: false }}
                       skinTonesDisabled={true}
+                      emojiSize={22}
                     />
                   )}
                   {activeTab === 'gif' && (

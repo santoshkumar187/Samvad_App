@@ -1186,6 +1186,10 @@ body {
   --epr-search-border-color: transparent !important;
   --epr-active-category-indicator-color: #00a884 !important;
   
+  --epr-emoji-size: 22px !important;
+  --epr-emoji-padding: 3px !important;
+  --epr-emoji-fullsize: 28px !important;
+  
   border: none !important;
   box-shadow: none !important;
   border-radius: 0 !important;
@@ -1257,6 +1261,36 @@ body {
 
 .EmojiPickerReact .epr-body::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Force 12 columns layout on category content */
+.EmojiPickerReact .epr-emoji-category-content {
+  padding: 0 10px 10px 10px !important;
+  grid-template-columns: repeat(12, 1fr) !important;
+  gap: 4px 2px !important;
+  justify-content: center !important;
+}
+
+.EmojiPickerReact button.epr-emoji {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+.EmojiPickerReact .epr-emoji-img {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
+  padding: 0 !important;
 }
 
 .input-pill-actions {

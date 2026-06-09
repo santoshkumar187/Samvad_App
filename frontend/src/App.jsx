@@ -480,7 +480,7 @@ function App() {
         let senderName = msg.sender_name || 'Someone';
         let notificationTitle = `New message from ${senderName}`;
         let toastTitle = senderName;
-        let iconUrl = 'https://api.dicebear.com/7.x/bottts/svg?seed=Samvad';
+        let iconUrl = '/icons/icon-192.png'; // Use app logo as default
 
         if (msg.group_id) {
           const group = usersRef.current.find(u => u.isGroup && Number(u.id) === Number(msg.group_id));
@@ -502,7 +502,8 @@ function App() {
         if ('Notification' in window && Notification.permission === 'granted') {
           const n = new Notification(notificationTitle, {
             body: msg.content || 'Sent a media file',
-            icon: iconUrl
+            icon: iconUrl,
+            badge: '/icons/icon-192.png' // This replaces the Chrome logo on mobile status bars
           });
           
           n.onclick = () => {

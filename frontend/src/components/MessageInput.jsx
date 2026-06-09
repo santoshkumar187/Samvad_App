@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import axios from 'axios'
 import { MdInsertEmoticon, MdAdd, MdMic, MdInsertPhoto, MdSend, MdCameraAlt, MdDeleteOutline } from 'react-icons/md'
@@ -6,6 +6,7 @@ import { MdInsertEmoticon, MdAdd, MdMic, MdInsertPhoto, MdSend, MdCameraAlt, MdD
 export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onCancelReply, onTyping }) {
   const [text, setText] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const emojiContainerRef = useRef(null)
   const [isUploading, setIsUploading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -52,9 +53,31 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
     }
   }
 
-  const onEmojiClick = (emojiObject) => {
-    setText(prev => prev + emojiObject.emoji)
+  const onEmojiClick = (emojiData) => {
+    if (emojiData && emojiData.emoji) {
+      setText(prev => prev + emojiData.emoji)
+    }
   }
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (emojiContainerRef.current && !emojiContainerRef.current.contains(event.target)) {
+        const emojiBtn = event.target.closest('.emoji-icon');
+        if (!emojiBtn) {
+          setShowEmojiPicker(false);
+        }
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showEmojiPicker]);
 
   const startVisualizer = (stream) => {
     try {
@@ -368,7 +391,7 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
             </div>
 
             {showEmojiPicker && (
-              <div className="emoji-picker-container">
+              <div className="emoji-picker-container" ref={emojiContainerRef}>
                 <EmojiPicker onEmojiClick={onEmojiClick} theme={Theme.DARK} />
               </div>
             )}
@@ -381,7 +404,6 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
               disabled={isUploading}
-              onFocus={() => setShowEmojiPicker(false)}
             />
 
             <div className="input-pill-actions">

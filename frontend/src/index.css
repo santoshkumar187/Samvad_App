@@ -1014,6 +1014,7 @@ body {
 }
 
 .input-pill-wrapper {
+  position: relative;
   flex-grow: 1;
   display: flex;
   align-items: center;
@@ -1036,7 +1037,7 @@ body {
   position: absolute;
   bottom: 100%;
   left: 0;
-  z-index: 1000;
+  z-index: 2000;
   margin-bottom: 10px;
 }
 
@@ -1367,13 +1368,6 @@ body {
   display: none !important;
 }
 
-/* Emoji Container */
-.emoji-picker-container {
-  position: absolute;
-  bottom: 80px;
-  left: 20px;
-  z-index: 100;
-}
 
 /* Dropdown Menu */
 .header-dropdown {

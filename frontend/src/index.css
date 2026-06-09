@@ -2154,25 +2154,28 @@ body {
   animation: reactionPop 0.3s ease-out;
 }
 
-  /* Mobile Emoji Picker Bottom Sheet */
+  /* Mobile Floating Emoji Picker Box (No Bottom Sheet) */
   .emoji-picker-container {
-    position: fixed !important;
-    bottom: 0 !important;
+    position: absolute !important;
+    bottom: 100% !important;
     left: 0 !important;
-    width: 100% !important;
-    height: 350px !important;
+    width: calc(100vw - 24px) !important;
+    max-width: 350px !important;
+    height: 380px !important;
     z-index: 2000 !important;
-    margin-bottom: 0 !important;
-    animation: bottomSheetSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    margin-bottom: 10px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
+    animation: none !important;
   }
 
   .emoji-picker-container .EmojiPickerReact {
     width: 100% !important;
     height: 100% !important;
     max-width: 100% !important;
-    border-radius: 24px 24px 0 0 !important;
+    border-radius: 12px !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
   }
 
   /* Compact theme grid on mobile */

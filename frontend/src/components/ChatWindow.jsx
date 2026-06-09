@@ -557,9 +557,20 @@ export default function ChatWindow({
 
   if (!selectedUser) {
     return (
-      <div className="chat-area">
-        <div className="empty-chat" style={{ textAlign: 'center' }}>
-          <MdChat size={64} color="#2c2c36" />
+      <div className="chat-area empty-chat-area">
+        <div className="empty-chat-container">
+          <div className="empty-chat-glowing-logo">
+            <img src="/icons/icon-192.png" alt="Samvad Logo" className="empty-chat-logo" />
+            <div className="logo-pulse-ring"></div>
+          </div>
+          <h2 className="empty-chat-title">Samvad App</h2>
+          <p className="empty-chat-subtitle">
+            Seamless real-time messaging, secure voice/video calling, and intelligent AI assistance in one premium space.
+          </p>
+          <div className="empty-chat-divider"></div>
+          <p className="empty-chat-encryption">
+            🔒 End-to-end encrypted. Your personal messages are secure.
+          </p>
         </div>
       </div>
     )
@@ -567,13 +578,16 @@ export default function ChatWindow({
 
   const renderTextWithLinks = (text) => {
     if (!text || typeof text !== 'string') return text;
+
+    // Split by URLs first
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const parts = text.split(urlRegex);
-    return parts.map((part, i) => {
+
+    return parts.map((part, partIdx) => {
       if (part.match(urlRegex)) {
         return (
           <a
-            key={i}
+            key={`url-${partIdx}`}
             href={part}
             target="_blank"
             rel="noopener noreferrer"
@@ -584,7 +598,64 @@ export default function ChatWindow({
           </a>
         );
       }
-      return <span key={i}>{part}</span>;
+
+      // Process code blocks ```code```
+      const codeBlockRegex = /(```[\s\S]*?```)/g;
+      const subParts = part.split(codeBlockRegex);
+
+      return subParts.map((subPart, subIdx) => {
+        if (subPart.startsWith('```') && subPart.endsWith('```')) {
+          const codeLines = subPart.slice(3, -3).trim().split('\n');
+          let lang = '';
+          let code = subPart.slice(3, -3).trim();
+          if (codeLines.length > 0 && /^[a-zA-Z0-9+#]+$/.test(codeLines[0])) {
+            lang = codeLines[0];
+            code = codeLines.slice(1).join('\n');
+          }
+          return (
+            <div key={`code-block-${subIdx}`} className="code-block-container" style={{ margin: '8px 0', background: 'rgba(0, 0, 0, 0.4)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+              {lang && <div className="code-block-header" style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.03)', color: '#888', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', textTransform: 'uppercase', fontFamily: 'monospace' }}>{lang}</div>}
+              <pre style={{ margin: 0, padding: '10px 12px', overflowX: 'auto', fontFamily: 'monospace', fontSize: '0.88rem', color: '#e5c7ff', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{code}</pre>
+            </div>
+          );
+        }
+
+        // Process inline code `code`
+        const inlineCodeRegex = /(`[^`]+`)/g;
+        const inlineParts = subPart.split(inlineCodeRegex);
+
+        return inlineParts.map((inlinePart, inlineIdx) => {
+          if (inlinePart.startsWith('`') && inlinePart.endsWith('`')) {
+            return (
+              <code key={`inline-code-${inlineIdx}`} style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace', fontSize: '0.9rem', color: '#ffb3ff' }}>
+                {inlinePart.slice(1, -1)}
+              </code>
+            );
+          }
+
+          // Process bold **text**
+          const boldRegex = /(\*\*[^*]+\*\*)/g;
+          const boldParts = inlinePart.split(boldRegex);
+
+          return boldParts.map((boldPart, boldIdx) => {
+            if (boldPart.startsWith('**') && boldPart.endsWith('**')) {
+              return <strong key={`bold-${boldIdx}`} style={{ fontWeight: '700', color: '#fff' }}>{boldPart.slice(2, -2)}</strong>;
+            }
+
+            // Process italic *text*
+            const italicRegex = /(\*[^*]+\*)/g;
+            const italicParts = boldPart.split(italicRegex);
+
+            return italicParts.map((italicPart, italicIdx) => {
+              if (italicPart.startsWith('*') && italicPart.endsWith('*')) {
+                return <em key={`italic-${italicIdx}`} style={{ fontStyle: 'italic' }}>{italicPart.slice(1, -1)}</em>;
+              }
+
+              return <span key={`text-${italicIdx}`}>{italicPart}</span>;
+            });
+          });
+        });
+      });
     });
   };
 
@@ -743,8 +814,10 @@ export default function ChatWindow({
     return `last seen ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   }
 
+  const isAiChat = selectedUser?.samvad_id === 'ai#9999';
+
   return (
-    <div className="chat-area">
+    <div className={`chat-area ${isAiChat ? 'ai-chat-area' : ''}`}>
       <div className="chat-header">
         <div className="back-btn" onClick={onBack}>
           <MdArrowBack />
@@ -1280,7 +1353,7 @@ export default function ChatWindow({
               <div style={{ padding: '10px 15px', fontSize: '0.8rem', color: 'var(--signal-text-muted)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                 Select Target Language
               </div>
-              {['English', 'Spanish', 'Hindi', 'French', 'Japanese'].map(lang => (
+              {['English', 'Spanish', 'Hindi', 'French', 'Japanese', 'Tibetan', 'Malayalam', 'Marathi', 'Kannada'].map(lang => (
                 <div key={lang} className="context-item" onClick={() => handleTranslate(lang)}>
                   {lang}
                 </div>

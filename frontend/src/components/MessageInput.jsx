@@ -381,6 +381,7 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
               disabled={isUploading}
+              onFocus={() => setShowEmojiPicker(false)}
             />
 
             <div className="input-pill-actions">

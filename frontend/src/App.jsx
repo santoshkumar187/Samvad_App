@@ -274,14 +274,43 @@ function App() {
   const [incomingCall, setIncomingCall] = useState(null)
   const [activeCall, setActiveCall] = useState(null)
 
-  // Auto-fullscreen when selecting the AI Assistant
+  // Sidebar draggable resizing state and handling
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    return Number(localStorage.getItem('samvad_sidebar_width')) || 300;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e) => {
+      const newWidth = Math.max(260, Math.min(500, e.clientX));
+      setSidebarWidth(newWidth);
+      localStorage.setItem('samvad_sidebar_width', newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
+  // Ensure sidebar is shown again if no chat is selected (e.g. back navigation)
   useEffect(() => {
     if (!selectedUser) {
       setIsSidebarHidden(false);
-      return;
-    }
-    if (selectedUser.samvad_id === 'ai#9999') {
-      setIsSidebarHidden(true);
     }
   }, [selectedUser]);
 
@@ -1077,8 +1106,11 @@ function App() {
   }
 
   return (
-    <div className="app-container">
-      <div className={`user-list-sidebar ${selectedUser ? 'mobile-hide' : ''} ${isSidebarHidden ? 'desktop-hide' : ''}`}>
+    <div className={`app-container ${isResizing ? 'resizing-active' : ''}`}>
+      <div 
+        className={`user-list-sidebar ${selectedUser ? 'mobile-hide' : ''} ${isSidebarHidden ? 'desktop-hide' : ''}`}
+        style={!isSidebarHidden ? { width: `${sidebarWidth}px` } : {}}
+      >
         <UserList 
           currentUser={currentUser} 
           users={users} 
@@ -1095,6 +1127,13 @@ function App() {
           onTogglePinChat={handleTogglePinChat}
         />
       </div>
+
+      {!isSidebarHidden && (
+        <div 
+          className="sidebar-resizer desktop-only" 
+          onMouseDown={handleMouseDown}
+        />
+      )}
       
       <div className={`chat-window-container ${!selectedUser ? 'mobile-hide' : 'mobile-show'}`}>
         <ChatWindow 

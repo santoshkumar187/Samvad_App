@@ -3,9 +3,30 @@ import EmojiPicker, { Theme } from 'emoji-picker-react'
 import axios from 'axios'
 import { MdInsertEmoticon, MdAdd, MdMic, MdInsertPhoto, MdSend, MdCameraAlt, MdDeleteOutline } from 'react-icons/md'
 
+const StickerIcon = ({ className }) => (
+  <svg 
+    stroke="currentColor" 
+    fill="none" 
+    strokeWidth="2" 
+    viewBox="0 0 24 24" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className} 
+    height="1.1em" 
+    width="1.1em" 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+    <path d="M20 12v-6a2 2 0 0 0 -2 -2h-12a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h6" />
+    <path d="M20 12a8 8 0 0 1 -8 8" />
+    <path d="M20 12h-5a3 3 0 0 0 -3 3v5" />
+  </svg>
+);
+
 export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onCancelReply, onTyping }) {
   const [text, setText] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [activeTab, setActiveTab] = useState('emoji')
   const emojiContainerRef = useRef(null)
   const [isUploading, setIsUploading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
@@ -392,7 +413,68 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
 
             {showEmojiPicker && (
               <div className="emoji-picker-container" ref={emojiContainerRef}>
-                <EmojiPicker onEmojiClick={onEmojiClick} theme={Theme.DARK} />
+                <div className="emoji-picker-content">
+                  {activeTab === 'emoji' && (
+                    <EmojiPicker 
+                      onEmojiClick={onEmojiClick} 
+                      theme={Theme.DARK} 
+                      width="100%"
+                      height="100%"
+                      previewConfig={{ showPreview: false }}
+                      skinTonesDisabled={true}
+                    />
+                  )}
+                  {activeTab === 'gif' && (
+                    <div className="gif-picker-content">
+                      <div className="search-bar-wrapper">
+                        <input type="text" placeholder="Search GIF" className="gif-search-input" />
+                      </div>
+                      <div className="picker-placeholder-view">
+                        <span className="placeholder-icon">🎬</span>
+                        <p className="placeholder-title">GIF Search coming soon</p>
+                        <p className="placeholder-subtitle">We are working on bringing GIPHY integration to Samvad!</p>
+                      </div>
+                    </div>
+                  )}
+                  {activeTab === 'sticker' && (
+                    <div className="sticker-picker-content">
+                      <div className="picker-placeholder-view">
+                        <span className="placeholder-icon">✨</span>
+                        <p className="placeholder-title">Sticker Pack coming soon</p>
+                        <p className="placeholder-subtitle">Custom and animated sticker packs will be available in the next release!</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="emoji-picker-switcher">
+                  <div className="switcher-pill">
+                    <button 
+                      type="button"
+                      className={`switcher-btn ${activeTab === 'emoji' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('emoji')}
+                      title="Emoji"
+                    >
+                      <MdInsertEmoticon size={18} />
+                    </button>
+                    <button 
+                      type="button"
+                      className={`switcher-btn ${activeTab === 'gif' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gif')}
+                      title="GIF"
+                    >
+                      GIF
+                    </button>
+                    <button 
+                      type="button"
+                      className={`switcher-btn ${activeTab === 'sticker' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('sticker')}
+                      title="Sticker"
+                    >
+                      <StickerIcon className="sticker-svg-icon" />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
             

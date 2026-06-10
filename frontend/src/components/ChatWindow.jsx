@@ -89,7 +89,12 @@ function VoiceNotePlayer({ src, sender, isCurrentUser, serverUrl, fileName }) {
   const isMusic = fileName && !fileName.startsWith('voice-note-');
 
   return (
-    <div className={`voice-note-player-card ${isCurrentUser ? 'sent' : 'received'}`} onClick={e => e.stopPropagation()}>
+    <div className={`voice-note-player-card ${isCurrentUser ? 'sent' : 'received'}`} onClick={e => e.stopPropagation()} style={{ position: 'relative' }}>
+      {isMusic && (
+        <div className="music-file-name" style={{ position: 'absolute', top: '-18px', left: 0, fontSize: '0.75rem', opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
+          {fileName}
+        </div>
+      )}
       <div className="voice-note-avatar">
         {isMusic ? (
           <div className={`music-logo ${isPlaying ? 'playing' : ''}`} style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'linear-gradient(135deg, #FF6B6B, #C06C84)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -116,63 +121,37 @@ function VoiceNotePlayer({ src, sender, isCurrentUser, serverUrl, fileName }) {
         )}
       </button>
 
-      <div className="voice-note-waveform-container" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        {isMusic ? (
-          <div className="music-player-progress-container" style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div className="music-file-name" style={{ fontSize: '0.85rem', fontWeight: '500', color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
-              {fileName}
-            </div>
-            <div style={{ position: 'relative', height: '4px', background: 'rgba(255, 255, 255, 0.2)', borderRadius: '2px', width: '100%' }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${progressPercent}%`, background: 'var(--brand-violet)', borderRadius: '2px' }} />
-              <input
-                type="range"
-                min="0"
-                max={duration || 100}
-                value={currentTime}
-                onChange={handleTimelineChange}
-                className="voice-note-slider"
-                style={{ position: 'absolute', top: '-6px', height: '16px', opacity: 0, cursor: 'pointer', width: '100%' }}
+      <div className="voice-note-waveform-container">
+        <div className="voice-note-wave-visual">
+          {waveBars.map((barHeight, idx) => {
+            const barProgress = (idx / waveBars.length) * 100;
+            const isPlayed = progressPercent > barProgress;
+            return (
+              <div
+                key={idx}
+                className={`voice-note-wave-bar ${isPlayed ? 'played' : ''}`}
+                style={{
+                  height: `${barHeight}px`,
+                  backgroundColor: isPlayed ? 'var(--brand-violet)' : 'rgba(255, 255, 255, 0.25)'
+                }}
               />
-            </div>
-            <div className="voice-note-time-info" style={{ marginTop: '2px' }}>
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="voice-note-wave-visual">
-              {waveBars.map((barHeight, idx) => {
-                const barProgress = (idx / waveBars.length) * 100;
-                const isPlayed = progressPercent > barProgress;
-                return (
-                  <div
-                    key={idx}
-                    className={`voice-note-wave-bar ${isPlayed ? 'played' : ''}`}
-                    style={{
-                      height: `${barHeight}px`,
-                      backgroundColor: isPlayed ? 'var(--brand-violet)' : 'rgba(255, 255, 255, 0.25)'
-                    }}
-                  />
-                );
-              })}
-            </div>
+            );
+          })}
+        </div>
 
-            <input
-              type="range"
-              min="0"
-              max={duration || 100}
-              value={currentTime}
-              onChange={handleTimelineChange}
-              className="voice-note-slider"
-            />
+        <input
+          type="range"
+          min="0"
+          max={duration || 100}
+          value={currentTime}
+          onChange={handleTimelineChange}
+          className="voice-note-slider"
+        />
 
-            <div className="voice-note-time-info">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-          </>
-        )}
+        <div className="voice-note-time-info">
+          <span>{formatTime(currentTime)}</span>
+          <span>{formatTime(duration)}</span>
+        </div>
       </div>
     </div>
   );
@@ -1498,11 +1477,14 @@ export default function ChatWindow({
                       {isEditingGroupName && (
                         <div style={{ display: 'flex', gap: '8px', padding: '0 5px', width: '100%' }}>
                           <input
+                            id="edit-group-name"
+                            name="edit_group_name"
                             type="text"
                             placeholder="Enter group name..."
                             value={groupNameInput}
                             onChange={e => setGroupNameInput(e.target.value)}
                             style={{ padding: '8px 12px', fontSize: '0.9rem', flex: 1, background: '#121212', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px' }}
+                            autoComplete="off"
                           />
                           <button
                             className="primary-btn"

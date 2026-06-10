@@ -414,21 +414,27 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
               </div>
               <div className="input-wrapper" style={{ border: '1px solid #333' }}>
                 <input 
+                  id="profile-username"
+                  name="profile_username"
                   type="text" 
                   className="input-field" 
                   placeholder="Username" 
                   value={usernameText}
                   onChange={e => setUsernameText(e.target.value)}
                   style={{ fontWeight: '600' }}
+                  autoComplete="username"
                 />
               </div>
               <div className="input-wrapper" style={{ border: '1px solid #333' }}>
                 <input 
+                  id="profile-about"
+                  name="profile_about"
                   type="text" 
                   className="input-field" 
                   placeholder="About" 
                   value={aboutText}
                   onChange={e => setAboutText(e.target.value)}
+                  autoComplete="off"
                 />
               </div>
               <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
@@ -466,11 +472,14 @@ export default function UserList({ currentUser, users, selectedUser, onSelectUse
               </div>
               <div className="input-wrapper" style={{ border: '1px solid #333' }}>
                 <input 
+                  id="group-name"
+                  name="group_name"
                   type="text" 
                   className="input-field" 
                   placeholder="Group Name" 
                   value={groupName}
                   onChange={e => setGroupName(e.target.value)}
+                  autoComplete="off"
                   required
                 />
               </div>

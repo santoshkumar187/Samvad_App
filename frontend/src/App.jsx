@@ -1018,11 +1018,14 @@ function App() {
               <div className="input-wrapper">
                 <MdPerson className="input-icon" />
                 <input 
+                  id="auth-username"
+                  name="username"
                   type="text" 
                   className="input-field" 
                   placeholder={isLoginMode ? "Email, Username or samvadId" : "Enter Username"} 
                   value={usernameInput}
                   onChange={e => setUsernameInput(e.target.value)}
+                  autoComplete="username"
                   autoFocus
                 />
               </div>
@@ -1038,11 +1041,14 @@ function App() {
                 <div className="input-wrapper">
                   <MdEmail className="input-icon" />
                   <input 
+                    id="auth-email"
+                    name="email"
                     type="email" 
                     className="input-field" 
                     placeholder="Enter Email Address" 
                     value={emailInput}
                     onChange={e => setEmailInput(e.target.value)}
+                    autoComplete="email"
                   />
                 </div>
                 {emailInput && (
@@ -1056,11 +1062,14 @@ function App() {
             <div className="input-wrapper">
               <MdLock className="input-icon" />
               <input 
+                id="auth-password"
+                name="password"
                 type={showPassword ? "text" : "password"}  
                 className="input-field" 
                 placeholder="Enter Password" 
                 value={passwordInput}
                 onChange={e => setPasswordInput(e.target.value)}
+                autoComplete={isLoginMode ? "current-password" : "new-password"}
               />
               <div className="password-toggle-icon" onClick={() => setShowPassword(!showPassword)}>
                 {showPassword ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
@@ -1089,7 +1098,7 @@ function App() {
             {isLoginMode && (
               <div className="auth-secondary">
                 <label className="checkbox-label">
-                  <input type="checkbox" /> Remember me
+                  <input id="remember-me" name="remember" type="checkbox" /> Remember me
                 </label>
                 <span className="forgot-link" onClick={() => setShowForgotPassword(true)}>Forgot Password?</span>
               </div>
@@ -1294,11 +1303,14 @@ function App() {
               <div className="input-wrapper">
                 <MdPerson className="input-icon" />
                 <input 
+                  id="forgot-identifier"
+                  name="forgot_identifier"
                   type="text" 
                   className="input-field" 
                   placeholder="Username, Email, or samvadId"
                   value={forgotIdentifier}
                   onChange={e => setForgotIdentifier(e.target.value)}
+                  autoComplete="username"
                   required
                 />
               </div>
@@ -1310,11 +1322,14 @@ function App() {
                 <div className="input-wrapper captcha-input-wrapper">
                   <MdRefresh className="captcha-refresh-icon" onClick={generateCaptcha} title="Refresh CAPTCHA" />
                   <input 
+                    id="forgot-captcha"
+                    name="forgot_captcha"
                     type="text" 
                     className="input-field captcha-input" 
                     placeholder="Enter CAPTCHA Code"
                     value={captchaInput}
                     onChange={e => setCaptchaInput(e.target.value)}
+                    autoComplete="off"
                     required
                   />
                 </div>
@@ -1323,11 +1338,14 @@ function App() {
               <div className="input-wrapper">
                 <MdLock className="input-icon" />
                 <input 
+                  id="forgot-new-password"
+                  name="forgot_new_password"
                   type="password" 
                   className="input-field" 
                   placeholder="New Password (min 8 chars)"
                   value={forgotNewPassword}
                   onChange={e => setForgotNewPassword(e.target.value)}
+                  autoComplete="new-password"
                   required
                 />
               </div>
@@ -1335,11 +1353,14 @@ function App() {
               <div className="input-wrapper">
                 <MdLock className="input-icon" />
                 <input 
+                  id="forgot-confirm-password"
+                  name="forgot_confirm_password"
                   type="password" 
                   className="input-field" 
                   placeholder="Confirm New Password"
                   value={forgotConfirmPassword}
                   onChange={e => setForgotConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
                   required
                 />
               </div>

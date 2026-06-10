@@ -412,6 +412,8 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
             </div>
 
             <input 
+              id="chat-message-input"
+              name="chat_message"
               type="text" 
               className="message-input"
               placeholder={isUploading ? "Uploading..." : "Message"}
@@ -419,6 +421,7 @@ export default function MessageInput({ onSendMessage, serverUrl, replyingTo, onC
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
               disabled={isUploading}
+              autoComplete="off"
             />
 
             <div className="input-pill-actions">

@@ -1392,7 +1392,7 @@ io.on('connection', (socket) => {
 
 // Catch-all route to serve the frontend index.html for any unknown routes
 // This MUST be the last route in your app
-app.get('*any', (req, res) => {
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 

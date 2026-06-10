@@ -6,10 +6,10 @@ import {
   MdInfoOutline, MdPushPin, MdFullscreen, MdFullscreenExit, MdInsertDriveFile,
   MdPalette, MdPhotoLibrary, MdClose, MdSearch, MdTranslate, MdVolumeUp,
   MdPictureAsPdf, MdDescription, MdSlideshow, MdTableChart, MdArchive,
-  MdShare, MdBlock, MdNotificationsOff, MdNotifications, MdLink, MdEdit
+  MdShare, MdBlock, MdNotificationsOff, MdNotifications, MdLink, MdEdit, MdLibraryMusic
 } from 'react-icons/md'
 
-function VoiceNotePlayer({ src, sender, isCurrentUser, serverUrl }) {
+function VoiceNotePlayer({ src, sender, isCurrentUser, serverUrl, fileName }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -86,10 +86,21 @@ function VoiceNotePlayer({ src, sender, isCurrentUser, serverUrl }) {
     ? (sender.profile_pic.startsWith('http') ? sender.profile_pic : `${serverUrl}${sender.profile_pic}`)
     : null;
 
+  const isMusic = fileName && !fileName.startsWith('voice-note-');
+
   return (
-    <div className={`voice-note-player-card ${isCurrentUser ? 'sent' : 'received'}`} onClick={e => e.stopPropagation()}>
+    <div className={`voice-note-player-card ${isCurrentUser ? 'sent' : 'received'}`} onClick={e => e.stopPropagation()} style={{ position: 'relative' }}>
+      {isMusic && (
+        <div className="music-file-name" style={{ position: 'absolute', top: '-18px', left: 0, fontSize: '0.75rem', opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
+          {fileName}
+        </div>
+      )}
       <div className="voice-note-avatar">
-        {avatarUrl ? (
+        {isMusic ? (
+          <div className={`music-logo ${isPlaying ? 'playing' : ''}`} style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'linear-gradient(135deg, #FF6B6B, #C06C84)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <MdLibraryMusic size={24} color="#fff" />
+          </div>
+        ) : avatarUrl ? (
           <img src={avatarUrl} alt="" />
         ) : (
           <div className="voice-note-avatar-fallback">
@@ -727,7 +738,7 @@ export default function ChatWindow({
           : (selectedUser.isGroup
             ? { username: msg.sender_name, profile_pic: msg.sender_profile_pic }
             : selectedUser);
-        return <VoiceNotePlayer src={audioSrc} sender={senderObj} isCurrentUser={msg.sender_id === currentUser.id} serverUrl={serverUrl} />
+        return <VoiceNotePlayer src={audioSrc} sender={senderObj} isCurrentUser={msg.sender_id === currentUser.id} serverUrl={serverUrl} fileName={msg.content} />
       case 'file':
         const fileDetails = getFileCardDetails(msg.content);
         return (

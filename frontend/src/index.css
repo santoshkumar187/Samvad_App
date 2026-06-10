@@ -116,21 +116,43 @@ body {
   transition: background-color 0.2s ease;
   flex-shrink: 0;
   border-left: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.sidebar-resizer::after {
+/* Invisible wider hit area for easier grabbing */
+.sidebar-resizer::before {
   content: '';
   position: absolute;
   top: 0;
-  left: -4px;
-  width: 10px;
-  height: 100%;
+  bottom: 0;
+  left: -10px;
+  right: -10px;
+  z-index: 11;
+}
+
+/* Small visual drag handle in the middle */
+.sidebar-resizer::after {
+  content: '';
+  width: 2px;
+  height: 30px;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 4px 0 0 rgba(255, 255, 255, 0.2);
+  transform: translateX(-2px); /* Center the dots visually */
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .sidebar-resizer:hover,
 .sidebar-resizer:active {
-  background-color: var(--brand-violet);
-  box-shadow: 0 0 10px var(--brand-violet);
+  background-color: rgba(138, 43, 226, 0.5); /* var(--brand-violet) */
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:active::after {
+  background-color: #fff;
+  box-shadow: 4px 0 0 #fff;
 }
 
 /* Disable transitions and pointer events during resizing */
@@ -483,8 +505,7 @@ body {
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  max-width: 65%;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  max-width: 75%;
 }
 
 .message-wrapper.sent {
@@ -504,10 +525,8 @@ body {
   line-height: 1.4;
   color: var(--signal-text-main);
   display: inline-block;
-  min-width: 0;
-  max-width: 100%;
+  min-width: 100px;
   margin-bottom: 5px;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   animation: var(--bubble-animation, slideInUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
@@ -832,8 +851,8 @@ body {
 
 /* Media styling */
 .message-image {
-  width: 280px;
-  max-width: 100%;
+  max-width: 280px;
+  width: 100%;
   max-height: 400px;
   border-radius: 22px;
   display: block;
@@ -890,8 +909,8 @@ body {
 }
 
 .message-video {
-  width: 280px;
-  max-width: 100%;
+  max-width: 280px;
+  width: 100%;
   max-height: 400px;
   border-radius: 12px;
   display: block;
@@ -917,9 +936,8 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 10px 14px;
   border-radius: 16px;
-  min-width: 0;
-  width: 280px;
-  max-width: 100%;
+  min-width: 200px;
+  max-width: 280px;
   cursor: pointer;
   transition: all 0.2s ease;
   margin: 4px 0;
@@ -3843,9 +3861,8 @@ body {
   align-items: center;
   gap: 12px;
   padding: 4px 6px;
-  min-width: 0;
-  width: 320px;
-  max-width: 100%;
+  min-width: 250px;
+  max-width: 320px;
   position: relative;
   user-select: none;
 }
@@ -4131,13 +4148,9 @@ body {
   white-space: pre-wrap !important;
   word-break: break-word !important;
   display: inline-block;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
-/* Music Logo Animation */
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-.music-logo.playing {
-  animation: spin 3s linear infinite;
-}
+
+
+
+
+

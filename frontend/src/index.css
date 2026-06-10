@@ -483,7 +483,8 @@ body {
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  max-width: 75%;
+  max-width: 65%;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .message-wrapper.sent {
@@ -506,6 +507,7 @@ body {
   min-width: 0;
   max-width: 100%;
   margin-bottom: 5px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   animation: var(--bubble-animation, slideInUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
@@ -4129,6 +4131,7 @@ body {
   white-space: pre-wrap !important;
   word-break: break-word !important;
   display: inline-block;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 /* Music Logo Animation */
 @keyframes spin {
